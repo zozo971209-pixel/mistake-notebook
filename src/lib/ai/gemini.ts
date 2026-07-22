@@ -2,10 +2,65 @@ import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import { extractedQuestionSchema } from "@/lib/validations/question";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+
+const GEMINI_MODEL_PREFERENCE = [
+  "gemini-3.5-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-3-flash-preview",
+] as const;
 
 function client(apiKey: string) {
   return new GoogleGenAI({ apiKey });
+}
+
+function modelId(name: string) {
+  return name.replace(/^models\//, "");
+}
+
+export async function listUsableGeminiModels(apiKey: string) {
+  const pager = await client(apiKey).models.list({
+    config: { pageSize: 100, queryBase: true },
+  });
+  const available = pager.page
+    .filter((model) =>
+      model.name &&
+      model.name.includes("gemini") &&
+      model.supportedActions?.some((action) => action.toLowerCase().includes("generatecontent")),
+    )
+    .map((model) => modelId(model.name!));
+  const availableSet = new Set(available);
+  const preferred = GEMINI_MODEL_PREFERENCE.filter((model) => availableSet.has(model));
+  const remaining = available.filter(
+    (model) =>
+      !preferred.includes(model as (typeof GEMINI_MODEL_PREFERENCE)[number]) &&
+      !/(embedding|image|tts|audio|robotics)/i.test(model),
+  );
+  return [...preferred, ...remaining];
+}
+
+export async function testGeminiKey(apiKey: string) {
+  const models = await listUsableGeminiModels(apiKey);
+  if (!models.length) throw new Error("No generateContent model is available for this API key (404 Not Found).");
+
+  let lastError: unknown;
+  for (const model of models.slice(0, 5)) {
+    try {
+      const response = await client(apiKey).models.generateContent({
+        model,
+        contents: "Reply with exactly: OK",
+        config: { maxOutputTokens: 10 },
+      });
+      if (response.text?.trim()) return model;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (/API_KEY|API key|401|403/i.test(message)) throw error;
+    }
+  }
+  throw lastError ?? new Error("No usable Gemini model responded.");
 }
 
 const extractedSchema = {
@@ -40,7 +95,6 @@ export async function extractQuestion(input: { apiKey: string; imageBase64: stri
     config: {
       responseMimeType: "application/json",
       responseJsonSchema: extractedSchema,
-      temperature: 0.1,
       maxOutputTokens: 5000,
     },
   });
@@ -71,7 +125,7 @@ export async function tutorQuestion(input: { apiKey: string; question: string; c
 學生現在問：${input.userMessage}
 
 若參考答案可能有誤，要明確說明不確定性並建議核對課本或教師答案。避免過度自信。`,
-    config: { temperature: 0.35, maxOutputTokens: 3500 },
+    config: { maxOutputTokens: 3500 },
   });
   return response.text?.trim() || "AI 沒有回傳內容。";
 }
