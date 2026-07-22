@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BookOpenCheck, Loader2 } from "lucide-react";
+import { BookOpenCheck, Loader2, MailCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,10 @@ export function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [message, setMessage] = useState(searchParams.get("error") ?? "");
   const [kind, setKind] = useState<"error" | "success">("error");
+  const [confirmationEmail, setConfirmationEmail] = useState("");
 
   async function submit(formData: FormData, mode: "login" | "register") {
     setLoading(true);
@@ -24,6 +26,7 @@ export function AuthForm() {
     const supabase = createClient();
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
+    setConfirmationEmail(email);
 
     const result =
       mode === "login"
@@ -39,20 +42,55 @@ export function AuthForm() {
 
     if (result.error) {
       setKind("error");
-      setMessage(result.error.message);
+      setMessage(
+        result.error.code === "email_not_confirmed"
+          ? "這個 Email 尚未驗證。請打開驗證信並點擊確認連結，或按下方按鈕重新寄送。"
+          : result.error.message,
+      );
       setLoading(false);
       return;
     }
 
     if (mode === "register" && !result.data.session) {
       setKind("success");
-      setMessage("註冊成功，請到信箱完成驗證後再登入。");
+      setMessage("註冊成功。請打開驗證信並點擊信中的確認連結，再回來登入。");
       setLoading(false);
       return;
     }
 
     router.replace("/dashboard");
     router.refresh();
+  }
+
+  async function resendConfirmation() {
+    if (!confirmationEmail) {
+      setKind("error");
+      setMessage("請先在登入或註冊欄位輸入你的 Email。");
+      return;
+    }
+
+    setResending(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: confirmationEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      setKind("error");
+      setMessage(
+        error.status === 429
+          ? "寄送次數太頻繁，請稍候一分鐘再試。"
+          : `無法重新寄送驗證信：${error.message}`,
+      );
+    } else {
+      setKind("success");
+      setMessage("新的驗證信已寄出。請打開信件並點擊確認連結；只收到信還不算完成驗證。");
+    }
+    setResending(false);
   }
 
   return (
@@ -71,9 +109,23 @@ export function AuthForm() {
             <TabsTrigger value="register">註冊</TabsTrigger>
           </TabsList>
           {message && (
-            <Alert className="mt-4" variant={kind === "error" ? "destructive" : "default"}>
-              <AlertDescription>{message}</AlertDescription>
-            </Alert>
+            <div className="mt-4 space-y-3">
+              <Alert variant={kind === "error" ? "destructive" : "default"}>
+                <AlertDescription>{message}</AlertDescription>
+              </Alert>
+              {confirmationEmail && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={resending}
+                  onClick={resendConfirmation}
+                >
+                  {resending ? <Loader2 className="animate-spin" /> : <MailCheck />}
+                  重新寄送驗證信
+                </Button>
+              )}
+            </div>
           )}
           <TabsContent value="login">
             <AuthFields loading={loading} onSubmit={(data) => submit(data, "login")} />
