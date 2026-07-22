@@ -19,10 +19,14 @@ export function AuthForm() {
   const [message, setMessage] = useState(searchParams.get("error") ?? "");
   const [kind, setKind] = useState<"error" | "success">("error");
   const [confirmationEmail, setConfirmationEmail] = useState("");
+  const [showResend, setShowResend] = useState(false);
+  const [emailRateLimited, setEmailRateLimited] = useState(false);
 
   async function submit(formData: FormData, mode: "login" | "register") {
     setLoading(true);
     setMessage("");
+    setShowResend(false);
+    setEmailRateLimited(false);
     const supabase = createClient();
     const email = String(formData.get("email") ?? "");
     const password = String(formData.get("password") ?? "");
@@ -41,12 +45,22 @@ export function AuthForm() {
           });
 
     if (result.error) {
+      const isEmailRateLimit =
+        result.error.status === 429 ||
+        result.error.code === "over_email_send_rate_limit" ||
+        result.error.message.toLowerCase().includes("email rate limit");
+      const isUnconfirmed = result.error.code === "email_not_confirmed";
+
       setKind("error");
       setMessage(
-        result.error.code === "email_not_confirmed"
+        isEmailRateLimit
+          ? "目前已達 Supabase 免費寄信上限（整個網站每小時 2 封）。請不要重複註冊或重寄，約一小時後再試一次，並檢查垃圾郵件。"
+          : isUnconfirmed
           ? "這個 Email 尚未驗證。請打開驗證信並點擊確認連結，或按下方按鈕重新寄送。"
           : result.error.message,
       );
+      setShowResend(isEmailRateLimit || isUnconfirmed);
+      setEmailRateLimited(isEmailRateLimit);
       setLoading(false);
       return;
     }
@@ -54,6 +68,7 @@ export function AuthForm() {
     if (mode === "register" && !result.data.session) {
       setKind("success");
       setMessage("註冊成功。請打開驗證信並點擊信中的確認連結，再回來登入。");
+      setShowResend(true);
       setLoading(false);
       return;
     }
@@ -80,12 +95,17 @@ export function AuthForm() {
     });
 
     if (error) {
+      const isEmailRateLimit =
+        error.status === 429 ||
+        error.code === "over_email_send_rate_limit" ||
+        error.message.toLowerCase().includes("email rate limit");
       setKind("error");
       setMessage(
-        error.status === 429
-          ? "寄送次數太頻繁，請稍候一分鐘再試。"
+        isEmailRateLimit
+          ? "目前已達 Supabase 免費寄信上限（整個網站每小時 2 封）。請約一小時後再試，現在重複點擊不會寄出新信。"
           : `無法重新寄送驗證信：${error.message}`,
       );
+      setEmailRateLimited(isEmailRateLimit);
     } else {
       setKind("success");
       setMessage("新的驗證信已寄出。請打開信件並點擊確認連結；只收到信還不算完成驗證。");
@@ -103,8 +123,8 @@ export function AuthForm() {
         <CardDescription>把錯誤變成下一次答對的路線圖</CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="login">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="login" className="w-full flex-col gap-4">
+          <TabsList className="grid h-10 w-full grid-cols-2">
             <TabsTrigger value="login">登入</TabsTrigger>
             <TabsTrigger value="register">註冊</TabsTrigger>
           </TabsList>
@@ -113,16 +133,16 @@ export function AuthForm() {
               <Alert variant={kind === "error" ? "destructive" : "default"}>
                 <AlertDescription>{message}</AlertDescription>
               </Alert>
-              {confirmationEmail && (
+              {showResend && confirmationEmail && (
                 <Button
                   type="button"
                   variant="outline"
                   className="w-full"
-                  disabled={resending}
+                  disabled={resending || emailRateLimited}
                   onClick={resendConfirmation}
                 >
                   {resending ? <Loader2 className="animate-spin" /> : <MailCheck />}
-                  重新寄送驗證信
+                  {emailRateLimited ? "寄信暫時受限（約一小時）" : "重新寄送驗證信"}
                 </Button>
               )}
             </div>
