@@ -50,3 +50,16 @@ export function formatStructuredAnswer(config: AnswerConfig, selectedIds: string
   if (config.kind === "mixed" && writtenAnswer.trim()) return `${choices}\n補充作答：${writtenAnswer.trim()}`.trim();
   return choices;
 }
+
+export function evaluateStructuredAnswer(config: AnswerConfig, selectedIds: string[], blankValues: string[]) {
+  const normalized = (value: string) => value.trim().toLocaleLowerCase("zh-TW").replace(/\s+/g, " ");
+  if (config.kind === "written") return null;
+  if (config.kind === "fill_blank") {
+    if (!config.blankAnswers.length) return null;
+    return config.blankAnswers.every((answer, index) => normalized(answer) === normalized(blankValues[index] ?? ""));
+  }
+  if (!config.correctOptionIds.length) return null;
+  const expected = [...config.correctOptionIds].sort();
+  const actual = [...selectedIds].sort();
+  return expected.length === actual.length && expected.every((id, index) => id === actual[index]);
+}
