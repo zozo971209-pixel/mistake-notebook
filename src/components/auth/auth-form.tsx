@@ -169,7 +169,13 @@ function AuthFields({
   onSubmit: (data: FormData) => Promise<void>;
 }) {
   return (
-    <form action={onSubmit} className="mt-5 space-y-4">
+    <form
+      className="mt-5 space-y-4"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        await onSubmit(new FormData(event.currentTarget));
+      }}
+    >
       {registration && (
         <div className="space-y-2">
           <Label htmlFor="displayName">顯示名稱</Label>
