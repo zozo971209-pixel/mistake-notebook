@@ -34,7 +34,7 @@ export const extractedQuestionSchema = z.object({
   title: z.string().max(120).default(""),
   questionText: z.string().min(1).max(20000),
   questionType: z.string().max(50).default(""),
-  answerConfig: answerConfigSchema.default({ kind: "written", options: [], correctOptionIds: [], blankAnswers: [] }),
+  answerConfig: answerConfigSchema.default({ kind: "fill_blank", options: [], correctOptionIds: [], blankAnswers: [] }),
   chapterSuggestion: z.string().max(120).default(""),
   detectedAnswer: z.string().max(10000).default(""),
   solution: z.string().max(20000).default(""),

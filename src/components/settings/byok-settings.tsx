@@ -20,6 +20,8 @@ export function ByokSettings() {
   const [key, setKey] = useState("");
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [synced, setSynced] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -33,6 +35,12 @@ export function ByokSettings() {
       if (saved) sessionStorage.setItem(SESSION_KEY, saved);
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/ai/credentials", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((result: { exists?: boolean } | null) => setSynced(Boolean(result?.exists)));
   }, []);
 
   async function testAndSave() {
@@ -59,6 +67,30 @@ export function ByokSettings() {
     setRemember(false);
     setSuccess(false);
     setMessage("已從這個瀏覽器刪除 API Key。");
+  }
+
+  async function syncAcrossDevices() {
+    setSyncBusy(true);
+    setMessage("");
+    setSuccess(false);
+    const response = await fetch("/api/ai/credentials", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: key.trim() }) });
+    const result = await response.json() as { ok?: boolean; model?: string; error?: string };
+    setSyncBusy(false);
+    if (!response.ok || !result.ok) return setMessage(result.error ?? "無法同步 API Key");
+    sessionStorage.setItem(SESSION_KEY, key.trim());
+    setSynced(true);
+    setSuccess(true);
+    setMessage(`已使用 AES-256 加密同步。手機以同一帳號登入後可直接使用 ${result.model}，不需重貼 Key。`);
+  }
+
+  async function removeSynced() {
+    setSyncBusy(true);
+    const response = await fetch("/api/ai/credentials", { method: "DELETE" });
+    setSyncBusy(false);
+    if (!response.ok) return setMessage("無法刪除同步 Key，請稍後再試。");
+    setSynced(false);
+    setSuccess(true);
+    setMessage("已刪除帳號中的加密同步 Key；各裝置的本機 Key 不受影響。");
   }
 
   async function exportData() {
@@ -101,9 +133,13 @@ export function ByokSettings() {
         <CardContent className="space-y-4">
           <div className="space-y-2"><Label htmlFor="gemini-key">API Key</Label><Input id="gemini-key" type="password" autoComplete="off" value={key} onChange={(event) => setKey(event.target.value)} placeholder="貼上 AI Studio 建立的 Auth Key" /></div>
           <div className="flex items-start gap-3"><Checkbox id="remember-key" checked={remember} onCheckedChange={(value) => setRemember(Boolean(value))} /><div><Label htmlFor="remember-key">記住於這個裝置</Label><p className="mt-1 text-xs text-muted-foreground">勾選後存於瀏覽器 localStorage；共用電腦請勿勾選。未勾選時關閉分頁即清除。</p></div></div>
-          <div className="flex flex-wrap gap-3"><Button onClick={testAndSave} disabled={busy || !key.trim()}>{busy ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}測試並套用</Button><Button variant="outline" onClick={remove}><Trash2 />刪除本機 Key</Button></div>
+          <div className="flex flex-wrap gap-3"><Button onClick={testAndSave} disabled={busy || !key.trim()}>{busy ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}測試並套用到本機</Button><Button variant="outline" onClick={remove}><Trash2 />刪除本機 Key</Button></div>
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-medium">跨裝置加密同步</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Key 由伺服器以 AES-256-GCM 加密後綁定你的帳號；手機不會看到完整 Key，但 AI 請求可直接使用。</p></div><span className={`rounded-full px-3 py-1 text-xs font-medium ${synced ? "bg-emerald-500/15 text-emerald-400" : "bg-muted text-muted-foreground"}`}>{synced ? "已同步" : "尚未同步"}</span></div>
+            <div className="mt-4 flex flex-wrap gap-3"><Button type="button" variant="secondary" onClick={() => void syncAcrossDevices()} disabled={syncBusy || !key.trim()}>{syncBusy ? <Loader2 className="animate-spin" /> : <ShieldAlert />}{synced ? "更新同步 Key" : "加密並同步到手機"}</Button>{synced && <Button type="button" variant="ghost" onClick={() => void removeSynced()} disabled={syncBusy}><Trash2 />刪除同步 Key</Button>}</div>
+          </div>
           {message && <Alert variant={success ? "default" : "destructive"}><AlertDescription>{message}</AlertDescription></Alert>}
-          <Alert><ShieldAlert /><AlertTitle>安全界線</AlertTitle><AlertDescription>Key 會在你主動使用 AI 時送到本站伺服器代理，但不會寫入 Supabase、GitHub 或應用程式日誌。瀏覽器擴充功能仍可能讀取本機資料，因此建議使用專用且受限制的 Key。</AlertDescription></Alert>
+          <Alert><ShieldAlert /><AlertTitle>安全界線</AlertTitle><AlertDescription>本機模式的 Key 只存在瀏覽器；開啟同步後，Supabase 只保存加密內容，解密密鑰僅存在 Vercel 伺服器環境變數。本站不會把明文 Key 寫入 GitHub 或日誌。仍建議使用專用且受限制的 Key。</AlertDescription></Alert>
         </CardContent>
       </Card>
       <Card><CardHeader><CardTitle>匯出個人資料</CardTitle><CardDescription>下載題目、作答紀錄、設定與 AI 對話的 JSON 備份；不包含照片，因為本站從未保存照片。</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={exportData}><Download />下載 JSON 備份</Button></CardContent></Card>

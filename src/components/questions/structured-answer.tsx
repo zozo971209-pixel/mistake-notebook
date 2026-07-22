@@ -18,10 +18,6 @@ type StructuredAnswerInputProps = {
 };
 
 export function StructuredAnswerInput({ config, selectedIds, onSelectedIdsChange, writtenAnswer, onWrittenAnswerChange, blankValues, onBlankValuesChange, onStart }: StructuredAnswerInputProps) {
-  if (config.kind === "written") {
-    return <AnswerTextarea value={writtenAnswer} onChange={onWrittenAnswerChange} onStart={onStart} label="我的作答" placeholder="在揭曉答案前，先寫下你的完整思路…" />;
-  }
-
   if (config.kind === "fill_blank") {
     const count = Math.max(1, config.blankAnswers.length);
     return (

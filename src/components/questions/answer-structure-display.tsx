@@ -3,7 +3,6 @@ import { answerKindLabels, type AnswerConfig } from "@/lib/questions/answer-conf
 import { Badge } from "@/components/ui/badge";
 
 export function AnswerStructureDisplay({ config, revealCorrect = false }: { config: AnswerConfig; revealCorrect?: boolean }) {
-  if (config.kind === "written") return null;
   if (config.kind === "fill_blank") {
     return (
       <div className="space-y-2">

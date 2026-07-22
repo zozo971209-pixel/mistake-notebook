@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/ai/gemini";
+import { decryptCredential } from "@/lib/ai/credential-crypto";
 
 export async function prepareAiRequest(request: Request, action: "extract_question" | "tutor" | "similar") {
   const supabase = await createClient();
@@ -8,7 +9,16 @@ export async function prepareAiRequest(request: Request, action: "extract_questi
   const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
   if (!userId) return { error: "請先登入", status: 401 as const };
 
-  const byok = request.headers.get("x-gemini-api-key")?.trim();
+  const browserKey = request.headers.get("x-gemini-api-key")?.trim();
+  let syncedKey = "";
+  if (!browserKey) {
+    const { data: credential } = await supabase.from("user_ai_credentials").select("encrypted_key, iv, auth_tag").eq("user_id", userId).maybeSingle();
+    if (credential) {
+      try { syncedKey = decryptCredential(credential); }
+      catch { return { error: "同步的 API Key 無法解密，請到設定重新儲存。", status: 500 as const }; }
+    }
+  }
+  const byok = browserKey || syncedKey;
   const apiKey = byok || process.env.GEMINI_API_KEY;
   if (!apiKey) return { error: "網站公共 AI 尚未設定。請到「AI 與設定」加入自己的 Gemini API Key。", status: 503 as const };
 

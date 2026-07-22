@@ -67,7 +67,6 @@ export function AnswerConfigEditor({ value, onChange }: AnswerConfigEditorProps)
           {value.kind === "multiple_choice" && "重作時顯示核取方塊，可以選擇多項。"}
           {value.kind === "mixed" && "重作時同時顯示多選選項與文字補充欄。"}
           {value.kind === "fill_blank" && "依空格數量顯示多個填答欄位。"}
-          {value.kind === "written" && "重作時顯示一般文字作答欄。"}
         </p>
       </div>
 

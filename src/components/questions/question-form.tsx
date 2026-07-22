@@ -4,12 +4,13 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
-import { Camera, CheckCircle2, Loader2, ScanText, ShieldCheck, X } from "lucide-react";
+import { Camera, CheckCircle2, Crop, Loader2, ScanText, ShieldCheck, X } from "lucide-react";
 import type { Tables } from "@/types/database";
 import type { ExtractedQuestion, QuestionInput } from "@/lib/validations/question";
 import { answerKindLabels, parseAnswerConfig, type AnswerConfig } from "@/lib/questions/answer-config";
 import { createQuestionAction, updateQuestionAction } from "@/app/(app)/questions/actions";
 import { AnswerConfigEditor } from "@/components/questions/answer-config-editor";
+import { ImageCropDialog } from "@/components/questions/image-crop-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [cropOpen, setCropOpen] = useState(false);
   const [answerConfig, setAnswerConfig] = useState<AnswerConfig>(() => parseAnswerConfig(initial?.answer_config));
   const [isAiGenerated, setIsAiGenerated] = useState(initial?.is_ai_generated ?? false);
   const [fields, setFields] = useState({
@@ -78,6 +80,14 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
     }
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
+    setCropOpen(true);
+  }
+
+  function applyCrop(file: File) {
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setMessageKind("success");
+    setMessage("照片已裁切，確認預覽後即可開始 AI 掃描。");
   }
 
   function clearSelectedFile() {
@@ -190,6 +200,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
                       {scanning ? <Loader2 className="animate-spin" /> : <ScanText />}
                       {scanning ? "正在壓縮與辨識…" : "開始 AI 掃描"}
                     </Button>
+                    <Button type="button" variant="outline" onClick={() => setCropOpen(true)} disabled={scanning}><Crop />裁切照片</Button>
                     <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={scanning}><Camera />重新選擇</Button>
                     <Button type="button" variant="ghost" onClick={clearSelectedFile} disabled={scanning}><X />移除照片</Button>
                   </div>
@@ -234,7 +245,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
           <CardContent className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="我原本的答案"><Textarea rows={5} value={fields.originalAnswer} onChange={(e) => update("originalAnswer", e.target.value)} /></Field>
-              <Field label={answerConfig.kind === "mixed" ? "文字補充的參考答案" : answerConfig.kind === "written" ? "正確答案" : "答案補充說明（選填）"}><Textarea rows={5} value={fields.correctAnswer} onChange={(e) => update("correctAnswer", e.target.value)} /></Field>
+              <Field label={answerConfig.kind === "mixed" ? "文字補充的參考答案" : "答案補充說明（選填）"}><Textarea rows={5} value={fields.correctAnswer} onChange={(e) => update("correctAnswer", e.target.value)} /></Field>
             </div>
             <Field label="完整解法"><Textarea rows={7} value={fields.solutionText} onChange={(e) => update("solutionText", e.target.value)} /></Field>
             <Field label={`錯誤原因（${selectedErrorLabel}）`}><div className="flex flex-wrap gap-2">{commonErrors.map((error) => { const active = fields.errorTypes.includes(error); return <Button key={error} type="button" size="sm" variant={active ? "default" : "outline"} onClick={() => update("errorTypes", active ? fields.errorTypes.filter((item) => item !== error) : [...fields.errorTypes, error])}>{error}</Button>; })}</div></Field>
@@ -247,6 +258,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
         <div className="flex justify-end gap-3"><Button variant="outline" onClick={() => router.back()}>取消</Button><Button onClick={save} disabled={saving || !fields.questionText.trim()}>{saving && <Loader2 className="animate-spin" />}{initial ? "儲存修改" : "建立錯題"}</Button></div>
       </div>
       {isAiGenerated && <Button type="button" variant="ghost" size="sm" onClick={() => setIsAiGenerated(false)}><X />將這題標記為人工整理</Button>}
+      <ImageCropDialog open={cropOpen} imageUrl={previewUrl} filename={selectedFile?.name ?? "question.webp"} onOpenChange={setCropOpen} onComplete={applyCrop} />
     </div>
   );
 }
