@@ -7,7 +7,9 @@ import imageCompression from "browser-image-compression";
 import { Camera, CheckCircle2, Loader2, ScanText, ShieldCheck, X } from "lucide-react";
 import type { Tables } from "@/types/database";
 import type { ExtractedQuestion, QuestionInput } from "@/lib/validations/question";
+import { answerKindLabels, parseAnswerConfig, type AnswerConfig } from "@/lib/questions/answer-config";
 import { createQuestionAction, updateQuestionAction } from "@/app/(app)/questions/actions";
+import { AnswerConfigEditor } from "@/components/questions/answer-config-editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
   const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [answerConfig, setAnswerConfig] = useState<AnswerConfig>(() => parseAnswerConfig(initial?.answer_config));
   const [isAiGenerated, setIsAiGenerated] = useState(initial?.is_ai_generated ?? false);
   const [fields, setFields] = useState({
     subjectId: initial?.subject_id ?? subjects[0]?.id ?? "",
@@ -106,7 +109,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
         ...current,
         title: data.title || current.title,
         chapter: data.chapterSuggestion || current.chapter,
-        questionType: data.questionType || current.questionType,
+        questionType: data.questionType || answerKindLabels[data.answerConfig.kind],
         questionText: data.questionText,
         correctAnswer: data.detectedAnswer || current.correctAnswer,
         solutionText: data.solution || current.solutionText,
@@ -114,6 +117,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
         errorTypes: data.possibleErrorCauses,
         memoryTip: data.memoryTip,
       }));
+      setAnswerConfig(data.answerConfig);
       setScanWarnings(data.warnings);
       setIsAiGenerated(true);
       setMessageKind("success");
@@ -133,7 +137,8 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
       title: fields.title || null,
       chapter: fields.chapter || null,
       source: fields.source || null,
-      questionType: fields.questionType || null,
+      questionType: answerKindLabels[answerConfig.kind],
+      answerConfig,
       difficulty: fields.difficulty ? Number(fields.difficulty) : null,
       questionText: fields.questionText,
       originalAnswer: fields.originalAnswer || null,
@@ -218,10 +223,10 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
               <Field label="章節"><Input value={fields.chapter} onChange={(e) => update("chapter", e.target.value)} placeholder="例如：二次函數" /></Field>
               <Field label="題目標題"><Input value={fields.title} onChange={(e) => update("title", e.target.value)} placeholder="方便搜尋的短標題" /></Field>
               <Field label="來源"><Input value={fields.source} onChange={(e) => update("source", e.target.value)} placeholder="講義、考卷或頁碼" /></Field>
-              <Field label="題型"><Input value={fields.questionType} onChange={(e) => update("questionType", e.target.value)} placeholder="選擇、計算、申論…" /></Field>
               <Field label="難度"><Select value={fields.difficulty} onValueChange={(value) => update("difficulty", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[1,2,3,4,5].map((n) => <SelectItem key={n} value={String(n)}>{n} / 5</SelectItem>)}</SelectContent></Select></Field>
             </div>
             <Field label="題目文字"><Textarea rows={8} required value={fields.questionText} onChange={(e) => update("questionText", e.target.value)} placeholder="請輸入或掃描題目…" /></Field>
+            <AnswerConfigEditor value={answerConfig} onChange={setAnswerConfig} />
           </CardContent>
         </Card>
         <Card>
@@ -229,7 +234,7 @@ export function QuestionForm({ subjects, initial }: { subjects: Subject[]; initi
           <CardContent className="space-y-5">
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="我原本的答案"><Textarea rows={5} value={fields.originalAnswer} onChange={(e) => update("originalAnswer", e.target.value)} /></Field>
-              <Field label="正確答案"><Textarea rows={5} value={fields.correctAnswer} onChange={(e) => update("correctAnswer", e.target.value)} /></Field>
+              <Field label={answerConfig.kind === "mixed" ? "文字補充的參考答案" : answerConfig.kind === "written" ? "正確答案" : "答案補充說明（選填）"}><Textarea rows={5} value={fields.correctAnswer} onChange={(e) => update("correctAnswer", e.target.value)} /></Field>
             </div>
             <Field label="完整解法"><Textarea rows={7} value={fields.solutionText} onChange={(e) => update("solutionText", e.target.value)} /></Field>
             <Field label={`錯誤原因（${selectedErrorLabel}）`}><div className="flex flex-wrap gap-2">{commonErrors.map((error) => { const active = fields.errorTypes.includes(error); return <Button key={error} type="button" size="sm" variant={active ? "default" : "outline"} onClick={() => update("errorTypes", active ? fields.errorTypes.filter((item) => item !== error) : [...fields.errorTypes, error])}>{error}</Button>; })}</div></Field>

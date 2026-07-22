@@ -24,6 +24,7 @@ function toRow(input: QuestionInput, userId: string) {
     chapter: nullable(input.chapter),
     source: nullable(input.source),
     question_type: nullable(input.questionType),
+    answer_config: input.answerConfig,
     difficulty: input.difficulty,
     question_text: input.questionText,
     original_answer: nullable(input.originalAnswer),

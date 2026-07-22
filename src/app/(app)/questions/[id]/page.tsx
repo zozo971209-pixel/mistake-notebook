@@ -5,6 +5,8 @@ import { format } from "date-fns";
 import { zhTW } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
 import { QuestionActions } from "@/components/questions/question-actions";
+import { AnswerStructureDisplay } from "@/components/questions/answer-structure-display";
+import { parseAnswerConfig } from "@/lib/questions/answer-config";
 import { AiTutor } from "@/components/questions/ai-tutor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,7 @@ export default async function QuestionDetailPage({ params }: { params: Promise<{
   ]);
   if (!question) notFound();
   const subject = Array.isArray(question.subjects) ? question.subjects[0] : question.subjects;
+  const answerConfig = parseAnswerConfig(question.answer_config);
 
   return (
     <div className="space-y-6">
@@ -28,7 +31,7 @@ export default async function QuestionDetailPage({ params }: { params: Promise<{
       <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex flex-wrap gap-2">{subject?.name && <Badge variant="secondary">{subject.name}</Badge>}<Badge variant="outline">{question.status}</Badge>{question.is_ai_generated && <Badge><BrainCircuit />AI 協助整理</Badge>}</div><h1 className="mt-4 max-w-4xl text-3xl font-semibold tracking-tight">{question.title || "未命名錯題"}</h1><p className="mt-2 text-sm text-muted-foreground">{[question.chapter, question.source, question.question_type].filter(Boolean).join(" · ")}</p></div><QuestionActions id={question.id} favorite={question.is_favorite} /></div>
       <section className="grid gap-6 xl:grid-cols-[1fr_320px]">
         <div className="space-y-6">
-          <Card><CardHeader><CardTitle>題目</CardTitle></CardHeader><CardContent><div className="whitespace-pre-wrap text-base leading-8">{question.question_text}</div></CardContent></Card>
+          <Card><CardHeader><CardTitle>題目</CardTitle></CardHeader><CardContent className="space-y-5"><div className="whitespace-pre-wrap text-base leading-8">{question.question_text}</div><AnswerStructureDisplay config={answerConfig} revealCorrect /></CardContent></Card>
           <div className="grid gap-6 md:grid-cols-2"><InfoCard title="我原本的答案" content={question.original_answer} empty="尚未記錄" /><InfoCard title="正確答案" content={question.correct_answer} empty="尚未記錄" /></div>
           <InfoCard title="解題說明" content={question.solution_text} empty="尚未加入解法" />
           <Card><CardHeader><CardTitle>錯因與記憶線索</CardTitle></CardHeader><CardContent className="space-y-5"><div><p className="mb-2 text-sm text-muted-foreground">錯誤原因</p><div className="flex flex-wrap gap-2">{question.error_types.length ? question.error_types.map((item) => <Badge key={item} variant="destructive">{item}</Badge>) : <span className="text-sm text-muted-foreground">尚未分類</span>}</div></div><Separator /><div><p className="text-sm text-muted-foreground">反思</p><p className="mt-2 whitespace-pre-wrap leading-7">{question.error_note || "尚未記錄"}</p></div><div><p className="text-sm text-muted-foreground">一句話提示</p><p className="mt-2 font-medium text-primary">{question.memory_tip || "尚未記錄"}</p></div></CardContent></Card>

@@ -20,7 +20,7 @@ export default function Home() {
       <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 pb-20 pt-16 lg:grid-cols-[1.1fr_.9fr] lg:pt-28">
         <div>
           <span className="inline-flex rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-sm text-primary">個人 AI 錯題學習系統</span>
-          <h1 className="mt-6 max-w-3xl text-5xl font-semibold tracking-tight sm:text-6xl">不是收藏錯題，<br /><span className="text-primary">是讓錯誤不再發生。</span></h1>
+          <h1 className="mt-6 max-w-3xl text-5xl font-semibold tracking-tight text-primary sm:text-6xl">個人錯誤題庫</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">掃描題目、記錄錯因、重新作答，讓每一次失誤都轉化成可追蹤的理解。原始照片不保存，核心題庫沒有 AI 也能使用。</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg"><Link href="/login">開始建立題庫<ArrowRight /></Link></Button>

@@ -116,6 +116,7 @@ export type Database = {
       }
       questions: {
         Row: {
+          answer_config: Json
           chapter: string | null
           correct_answer: string | null
           correct_count: number
@@ -146,6 +147,7 @@ export type Database = {
           wrong_count: number
         }
         Insert: {
+          answer_config?: Json
           chapter?: string | null
           correct_answer?: string | null
           correct_count?: number
@@ -176,6 +178,7 @@ export type Database = {
           wrong_count?: number
         }
         Update: {
+          answer_config?: Json
           chapter?: string | null
           correct_answer?: string | null
           correct_count?: number
@@ -374,6 +377,7 @@ export type Database = {
           target_question_id: string
         }
         Returns: {
+          answer_config: Json
           chapter: string | null
           correct_answer: string | null
           correct_count: number
