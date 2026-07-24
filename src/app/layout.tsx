@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "錯題・再理解",
-    template: "%s｜錯題・再理解",
+    default: "個人錯誤題庫",
+    template: "%s｜個人錯誤題庫",
   },
   description: "把拍下來的錯題轉成可搜尋、可重做、會安排複習的個人學習系統。",
 };

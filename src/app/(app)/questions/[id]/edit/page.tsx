@@ -12,5 +12,5 @@ export default async function EditQuestionPage({ params }: { params: Promise<{ i
     supabase.from("subjects").select("*").order("sort_order"),
   ]);
   if (!question) notFound();
-  return <div className="space-y-6"><div><h1 className="text-3xl font-semibold tracking-tight">編輯錯題</h1><p className="mt-2 text-muted-foreground">修正 OCR、答案、錯因與記憶提示。</p></div><QuestionForm subjects={subjects ?? []} initial={question} /></div>;
+  return <div className="space-y-6"><div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">編輯錯題</h1><p className="mt-2 text-sm text-muted-foreground">修正題目、答案與錯因。</p></div><QuestionForm subjects={subjects ?? []} initial={question} /></div>;
 }

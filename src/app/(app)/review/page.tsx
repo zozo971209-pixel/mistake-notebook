@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ReviewSession } from "@/components/review/review-session";
+import { PageHeader } from "@/components/layout/page-header";
 
 export const metadata = { title: "今日複習" };
 
@@ -17,5 +18,5 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
     data = fallback.data;
   }
   const questions = (data ?? []).map((item) => ({ ...item, subjects: Array.isArray(item.subjects) ? item.subjects[0] ?? null : item.subjects }));
-  return <div className="space-y-6"><div><h1 className="text-3xl font-semibold tracking-tight">今日複習</h1><p className="mt-2 text-muted-foreground">先作答、再看解答；誠實評分比追求連勝更有價值。</p></div><ReviewSession initialQuestions={questions} /></div>;
+  return <div className="space-y-6"><PageHeader title="複習" description="先獨立作答，再揭曉答案。" /><ReviewSession initialQuestions={questions} /></div>;
 }

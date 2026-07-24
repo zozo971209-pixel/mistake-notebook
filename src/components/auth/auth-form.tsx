@@ -119,8 +119,8 @@ export function AuthForm() {
         <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
           <BookOpenCheck className="size-6" />
         </div>
-        <CardTitle className="text-2xl">錯題・再理解</CardTitle>
-        <CardDescription>把錯誤變成下一次答對的路線圖</CardDescription>
+        <CardTitle className="text-2xl">個人錯誤題庫</CardTitle>
+        <CardDescription>登入後繼續整理與複習</CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="login" className="w-full flex-col gap-4">

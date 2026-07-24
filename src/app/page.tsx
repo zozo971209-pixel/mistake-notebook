@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, BrainCircuit, Camera, LockKeyhole, RotateCcw } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Camera, LockKeyhole, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 const features = [
   { icon: Camera, title: "拍照只掃描", text: "照片只在當次辨識請求中處理，不寫入題庫或雲端檔案空間。" },
-  { icon: BrainCircuit, title: "AI 找出盲點", text: "擷取題目、整理知識點，並以提示或蘇格拉底方式陪你拆解錯誤。" },
+  { icon: BookOpenCheck, title: "留下真正錯因", text: "把原答案、正解和錯誤原因放在一起，回來時一眼看懂。" },
   { icon: RotateCcw, title: "安排下一次答對", text: "依答錯、困難、正確與輕鬆，自動調整熟練度與下次複習時間。" },
   { icon: LockKeyhole, title: "每人資料隔離", text: "Supabase RLS 在資料庫層限制每位使用者只能存取自己的題目。" },
 ];
@@ -14,14 +14,14 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-3 font-semibold"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BrainCircuit className="size-5" /></span>錯題・再理解</Link>
+        <Link href="/" className="flex items-center gap-3 font-semibold"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpenCheck className="size-5" /></span>個人錯誤題庫</Link>
         <Button asChild variant="outline"><Link href="/login">登入</Link></Button>
       </nav>
       <section className="mx-auto grid max-w-7xl items-center gap-12 px-6 pb-20 pt-16 lg:grid-cols-[1.1fr_.9fr] lg:pt-28">
         <div>
-          <span className="inline-flex rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-sm text-primary">個人 AI 錯題學習系統</span>
+          <span className="inline-flex rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-sm text-primary">讓錯誤成為下一次答對的線索</span>
           <h1 className="mt-6 max-w-3xl text-5xl font-semibold tracking-tight text-primary sm:text-6xl">個人錯誤題庫</h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">掃描題目、記錄錯因、重新作答，讓每一次失誤都轉化成可追蹤的理解。原始照片不保存，核心題庫沒有 AI 也能使用。</p>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">拍下題目、記住錯因、按時重做。把零散的錯題整理成清楚、可追蹤的學習路線。</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg"><Link href="/login">開始建立題庫<ArrowRight /></Link></Button>
             <Button asChild size="lg" variant="ghost"><Link href="/login">我已有帳號</Link></Button>

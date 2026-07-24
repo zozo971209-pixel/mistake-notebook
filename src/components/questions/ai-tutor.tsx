@@ -36,17 +36,17 @@ export function AiTutor({ questionId }: { questionId: string }) {
 
   return (
     <Card>
-      <CardHeader><CardTitle>AI 教師</CardTitle><CardDescription>預設先提示，不急著公布答案。AI 內容可能有誤，重要答案請和課本或教師版本核對。</CardDescription></CardHeader>
+        <CardHeader><CardTitle>解題助手</CardTitle><CardDescription>先從提示開始；重要答案仍請和課本或教師版本核對。</CardDescription></CardHeader>
       <CardContent className="space-y-4">
         <Select value={mode} onValueChange={setMode}><SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="hint">分層提示</SelectItem><SelectItem value="socratic">蘇格拉底引導</SelectItem><SelectItem value="diagnose">錯因診斷</SelectItem><SelectItem value="explain">完整講解</SelectItem><SelectItem value="similar">產生相似題</SelectItem></SelectContent></Select>
         <div className="max-h-[520px] space-y-3 overflow-y-auto rounded-xl border bg-background/40 p-4">
           {!messages.length && <p className="py-10 text-center text-sm text-muted-foreground">可以問：「不要直接給答案，先告訴我第一步該觀察什麼？」</p>}
           {messages.map((message, index) => <div key={index} className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}>{message.role === "assistant" && <Bot className="mt-1 size-5 shrink-0 text-primary" />}<div className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-4 py-3 text-sm leading-7 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{message.content}</div>{message.role === "user" && <UserRound className="mt-1 size-5 shrink-0" />}</div>)}
-          {busy && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />AI 正在整理思路…</div>}
+          {busy && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在整理…</div>}
         </div>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         <div className="flex gap-2"><Textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder="輸入追問…" onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void send(); }} /><Button size="icon" className="h-auto w-12" onClick={send} disabled={busy || !text.trim()}><Send /></Button></div>
-        <p className="text-xs text-muted-foreground">Ctrl / ⌘ + Enter 送出。若未設定自己的 Key，會嘗試使用網站公共額度。</p>
+        <p className="text-xs text-muted-foreground">Ctrl / ⌘ + Enter 送出。只有送出問題時才會使用一次服務。</p>
       </CardContent>
     </Card>
   );

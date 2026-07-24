@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, ShieldAlert, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 const SESSION_KEY = "mistake_notebook_gemini_key";
 const LOCAL_KEY = "mistake_notebook_gemini_key_remembered";
 
-export function ByokSettings() {
+export function ByokSettings({ section = "all" }: { section?: "all" | "key" | "data" }) {
   const router = useRouter();
   const [key, setKey] = useState("");
   const [remember, setRemember] = useState(false);
@@ -128,7 +128,7 @@ export function ByokSettings() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      {(section === "all" || section === "key") && <Card>
         <CardHeader><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary"><KeyRound /></span><div><CardTitle>自己的 Gemini API Key</CardTitle><CardDescription>公共額度不足時，可使用你自己的 Google 專案額度。</CardDescription></div></div></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2"><Label htmlFor="gemini-key">API Key</Label><Input id="gemini-key" type="password" autoComplete="off" value={key} onChange={(event) => setKey(event.target.value)} placeholder="貼上 AI Studio 建立的 Auth Key" /></div>
@@ -139,11 +139,10 @@ export function ByokSettings() {
             <div className="mt-4 flex flex-wrap gap-3"><Button type="button" variant="secondary" onClick={() => void syncAcrossDevices()} disabled={syncBusy || !key.trim()}>{syncBusy ? <Loader2 className="animate-spin" /> : <ShieldAlert />}{synced ? "更新同步 Key" : "加密並同步到手機"}</Button>{synced && <Button type="button" variant="ghost" onClick={() => void removeSynced()} disabled={syncBusy}><Trash2 />刪除同步 Key</Button>}</div>
           </div>
           {message && <Alert variant={success ? "default" : "destructive"}><AlertDescription>{message}</AlertDescription></Alert>}
-          <Alert><ShieldAlert /><AlertTitle>安全界線</AlertTitle><AlertDescription>本機模式的 Key 只存在瀏覽器；開啟同步後，Supabase 只保存加密內容，解密密鑰僅存在 Vercel 伺服器環境變數。本站不會把明文 Key 寫入 GitHub 或日誌。仍建議使用專用且受限制的 Key。</AlertDescription></Alert>
+          <details className="rounded-xl border bg-muted/15"><summary className="cursor-pointer list-none p-4 text-sm font-medium">查看安全與技術說明</summary><div className="border-t p-4 text-sm leading-6 text-muted-foreground">本機模式只存在瀏覽器；同步後只保存加密內容，明文不會寫入 GitHub 或日誌。建議使用專用且受限制的 Key。</div></details>
         </CardContent>
-      </Card>
-      <Card><CardHeader><CardTitle>匯出個人資料</CardTitle><CardDescription>下載題目、作答紀錄、設定與 AI 對話的 JSON 備份；不包含照片，因為本站從未保存照片。</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={exportData}><Download />下載 JSON 備份</Button></CardContent></Card>
-      <Card className="border-destructive/30"><CardHeader><CardTitle>刪除帳號</CardTitle><CardDescription>永久刪除登入帳號、題目、複習紀錄、設定與 AI 對話。建議先匯出備份。</CardDescription></CardHeader><CardContent><AlertDialog><AlertDialogTrigger asChild><Button variant="destructive"><Trash2 />永久刪除帳號</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>這個動作無法復原</AlertDialogTitle><AlertDialogDescription>所有個人資料會立即從資料庫刪除。由於本站不保存圖片，因此沒有圖片檔案需要另外清除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={deleteAccount}>我了解，永久刪除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></CardContent></Card>
+      </Card>}
+      {(section === "all" || section === "data") && <><Card><CardHeader><CardTitle>匯出個人資料</CardTitle><CardDescription>下載題目、作答紀錄與設定；照片從未保存，因此不包含照片。</CardDescription></CardHeader><CardContent><Button variant="outline" onClick={exportData}><Download />下載 JSON 備份</Button></CardContent></Card><Card className="border-destructive/30"><CardHeader><CardTitle>刪除帳號</CardTitle><CardDescription>永久刪除帳號與所有題庫資料。建議先匯出備份。</CardDescription></CardHeader><CardContent><AlertDialog><AlertDialogTrigger asChild><Button variant="destructive"><Trash2 />永久刪除帳號</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>這個動作無法復原</AlertDialogTitle><AlertDialogDescription>所有個人資料會立即從資料庫刪除。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>取消</AlertDialogCancel><AlertDialogAction onClick={deleteAccount}>我了解，永久刪除</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></CardContent></Card></>}
     </div>
   );
 }
