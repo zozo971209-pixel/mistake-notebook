@@ -27,7 +27,7 @@ export default function Home() {
             <Button asChild size="lg" variant="ghost"><Link href="/login">我已有帳號</Link></Button>
           </div>
         </div>
-        <Card className="overflow-hidden border-primary/15 bg-card/70 shadow-2xl shadow-violet-950/30">
+        <Card className="overflow-hidden border-primary/15 bg-card shadow-[0_24px_70px_rgb(55_48_163_/_0.12)]">
           <CardContent className="p-4 sm:p-6">
             <div className="rounded-xl border bg-background/60 p-5">
               <p className="text-xs text-muted-foreground">今日學習焦點</p>
@@ -42,7 +42,7 @@ export default function Home() {
         </Card>
       </section>
       <section className="mx-auto grid max-w-7xl gap-4 px-6 pb-24 sm:grid-cols-2 lg:grid-cols-4">
-        {features.map(({ icon: Icon, title, text }) => <Card key={title} className="bg-card/55"><CardContent className="p-5"><Icon className="size-5 text-primary" /><h2 className="mt-4 font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p></CardContent></Card>)}
+        {features.map(({ icon: Icon, title, text }) => <Card key={title} className="bg-card"><CardContent className="p-5"><Icon className="size-5 text-primary" /><h2 className="mt-4 font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p></CardContent></Card>)}
       </section>
     </main>
   );

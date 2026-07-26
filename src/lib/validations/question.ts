@@ -31,6 +31,7 @@ export const questionInputSchema = z.object({
 });
 
 export const extractedQuestionSchema = z.object({
+  subjectSuggestion: z.string().max(50).default(""),
   title: z.string().max(120).default(""),
   questionText: z.string().min(1).max(20000),
   questionType: z.string().max(50).default(""),

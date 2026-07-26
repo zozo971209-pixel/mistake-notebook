@@ -54,7 +54,7 @@ export function ReviewSession({ initialQuestions }: { initialQuestions: ReviewQu
   }
 
   if (!question) {
-    return <Card className="mx-auto max-w-2xl border-primary/20"><CardContent className="p-10 text-center"><Check className="mx-auto size-12 rounded-full bg-emerald-500/15 p-3 text-emerald-400" /><h2 className="mt-5 text-2xl font-semibold">這一輪完成了</h2><p className="mt-2 text-muted-foreground">你已處理所有待複習題目。答錯的題目也已安排再次出現。</p><div className="mt-6 flex justify-center gap-3"><Button asChild variant="outline"><Link href="/dashboard">回總覽</Link></Button><Button asChild><Link href="/questions">查看題庫</Link></Button></div></CardContent></Card>;
+    return <Card className="mx-auto max-w-2xl border-primary/20"><CardContent className="p-10 text-center"><Check className="mx-auto size-12 rounded-full bg-emerald-500/15 p-3 text-emerald-700" /><h2 className="mt-5 text-2xl font-semibold">這一輪完成了</h2><p className="mt-2 text-muted-foreground">你已處理所有待複習題目。答錯的題目也已安排再次出現。</p><div className="mt-6 flex justify-center gap-3"><Button asChild variant="outline"><Link href="/dashboard">回總覽</Link></Button><Button asChild><Link href="/questions">查看題庫</Link></Button></div></CardContent></Card>;
   }
 
   return (

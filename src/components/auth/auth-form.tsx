@@ -14,10 +14,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialNotice = searchParams.get("notice");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [message, setMessage] = useState(searchParams.get("error") ?? "");
-  const [kind, setKind] = useState<"error" | "success">("error");
+  const [message, setMessage] = useState(initialNotice ?? searchParams.get("error") ?? "");
+  const [kind, setKind] = useState<"error" | "success">(initialNotice ? "success" : "error");
+  const [activeTab, setActiveTab] = useState("login");
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [showResend, setShowResend] = useState(false);
   const [emailRateLimited, setEmailRateLimited] = useState(false);
@@ -61,6 +63,14 @@ export function AuthForm() {
       );
       setShowResend(isEmailRateLimit || isUnconfirmed);
       setEmailRateLimited(isEmailRateLimit);
+      setLoading(false);
+      return;
+    }
+
+    if (mode === "register" && result.data.user?.identities?.length === 0) {
+      setKind("success");
+      setMessage("這個 Email 已經註冊。請直接使用原本的密碼登入；如果忘記密碼，之後可使用重設密碼功能。");
+      setActiveTab("login");
       setLoading(false);
       return;
     }
@@ -114,7 +124,7 @@ export function AuthForm() {
   }
 
   return (
-    <Card className="w-full max-w-md border-white/10 bg-card/90 shadow-2xl shadow-violet-950/20">
+    <Card className="w-full max-w-md border-border bg-card/95 shadow-[0_24px_70px_rgb(55_48_163_/_0.12)]">
       <CardHeader className="space-y-3 text-center">
         <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
           <BookOpenCheck className="size-6" />
@@ -123,7 +133,7 @@ export function AuthForm() {
         <CardDescription>登入後繼續整理與複習</CardDescription>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="login" className="w-full flex-col gap-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-col gap-4">
           <TabsList className="grid h-10 w-full grid-cols-2">
             <TabsTrigger value="login">登入</TabsTrigger>
             <TabsTrigger value="register">註冊</TabsTrigger>

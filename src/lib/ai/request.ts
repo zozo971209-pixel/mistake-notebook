@@ -2,8 +2,12 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_GEMINI_MODEL } from "@/lib/ai/gemini";
 import { decryptCredential } from "@/lib/ai/credential-crypto";
+import { AI_AGE_ERROR, AI_AGE_HEADER } from "@/lib/ai/age";
 
 export async function prepareAiRequest(request: Request, action: "extract_question" | "tutor" | "similar") {
+  if (request.headers.get(AI_AGE_HEADER) !== "1") {
+    return { error: AI_AGE_ERROR, status: 403 as const };
+  }
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : null;
