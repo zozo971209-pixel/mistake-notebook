@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, BookOpenCheck, Home, LogOut, Menu, Plus, RotateCcw, Settings } from "lucide-react";
+import { BarChart3, BookOpenCheck, Home, LogOut, Map, Menu, Plus, RotateCcw, Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 
 const nav = [
   { href: "/dashboard", label: "首頁", icon: Home },
+  { href: "/outline", label: "學習地圖", icon: Map },
   { href: "/questions", label: "題庫", icon: BookOpenCheck },
   { href: "/review", label: "複習", icon: RotateCcw },
   { href: "/statistics", label: "分析", icon: BarChart3 },
@@ -47,7 +48,7 @@ export function AppShell({ children, email }: { children: React.ReactNode; email
         {navigation}
         <div className="mt-auto space-y-3 border-t pt-4">
           <p className="truncate px-2 text-xs text-muted-foreground">{email}</p>
-          <Button asChild variant="ghost" className="w-full justify-start"><Link href="/settings"><Settings />設定</Link></Button>
+          <Button asChild variant="ghost" className="w-full justify-start"><Link href="/settings"><Settings />API 設定</Link></Button>
           <Button variant="ghost" className="w-full justify-start" onClick={logout}><LogOut />登出</Button>
         </div>
       </aside>
@@ -59,7 +60,7 @@ export function AppShell({ children, email }: { children: React.ReactNode; email
             <SheetHeader className="mb-6 text-left"><SheetTitle>個人錯誤題庫</SheetTitle></SheetHeader>
             <Button asChild className="mb-5 w-full justify-start"><Link href="/questions/new"><Plus />新增錯題</Link></Button>
             {navigation}
-            <Button asChild variant="ghost" className="mt-6 w-full justify-start"><Link href="/settings"><Settings />設定</Link></Button>
+            <Button asChild variant="ghost" className="mt-6 w-full justify-start"><Link href="/settings"><Settings />API 設定</Link></Button>
             <Button variant="ghost" className="mt-6 w-full justify-start" onClick={logout}><LogOut />登出</Button>
           </SheetContent>
         </Sheet>
@@ -68,9 +69,9 @@ export function AppShell({ children, email }: { children: React.ReactNode; email
         <div className="mx-auto w-full max-w-7xl p-4 pb-24 sm:p-8 lg:pb-8">{children}</div>
       </main>
       <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border bg-card/95 p-1.5 shadow-[0_12px_35px_rgb(24_32_51_/_0.14)] backdrop-blur lg:hidden">
-        {nav.slice(0, 2).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] text-muted-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}
+        {nav.slice(0, 3).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] text-muted-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}
         <Link href="/questions/new" aria-label="新增錯題" className="mx-auto flex size-12 -translate-y-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"><Plus className="size-5" /></Link>
-        {nav.slice(2).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] text-muted-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}
+        {nav.slice(3, 5).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] text-muted-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}
       </nav>
     </div>
   );

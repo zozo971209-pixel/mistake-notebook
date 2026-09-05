@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpenCheck, CheckCircle2, Clock3, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, BookOpenCheck, CheckCircle2, Clock3, Map as MapIcon, Plus, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,9 +39,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <section className="overflow-hidden rounded-2xl border border-primary/20 bg-primary/[0.06] p-6 sm:p-8">
+      <section className="overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.10] via-card to-card p-6 shadow-[0_18px_50px_rgb(24_32_51_/_0.05)] sm:p-8">
         <div className="grid items-center gap-8 lg:grid-cols-[1fr_280px]">
-          <div><p className="text-sm font-medium text-primary">今天的學習焦點</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">還有 {dueCount ?? 0} 題等待複習</h1><p className="mt-3 max-w-xl text-muted-foreground">先完成到期題目，再記錄今天的新錯誤。</p><div className="mt-6 flex flex-wrap gap-3"><Button asChild size="lg"><Link href="/review">開始今日複習<ArrowRight /></Link></Button><Button asChild size="lg" variant="outline"><Link href="/questions/new"><Plus />新增錯題</Link></Button></div></div>
+          <div><p className="text-sm font-medium text-primary">今日工作區</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">還有 {dueCount ?? 0} 題等待複習</h1><p className="mt-3 max-w-xl text-muted-foreground">先完成到期題目，再把新的錯誤放回正確的學習節點。</p><div className="mt-6 flex flex-wrap gap-3"><Button asChild size="lg"><Link href="/review">開始今日複習<ArrowRight /></Link></Button><Button asChild size="lg" variant="outline"><Link href="/questions/new"><Plus />新增錯題</Link></Button><Button asChild size="lg" variant="ghost"><Link href="/outline"><MapIcon />查看學習地圖</Link></Button></div></div>
           <div className="rounded-2xl bg-background/60 p-5 text-center"><div className="mx-auto flex size-28 items-center justify-center rounded-full border-[10px] border-primary/20 text-3xl font-semibold text-primary">{Math.min(dueCount ?? 0, target)}<span className="ml-1 text-sm text-muted-foreground">/{target}</span></div><p className="mt-4 text-sm text-muted-foreground">今日複習目標</p></div>
         </div>
       </section>

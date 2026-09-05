@@ -1,0 +1,27 @@
+"use client";
+
+import Link from "next/link";
+import { ChevronDown, ChevronRight, Circle, FileQuestion, Plus, Sparkles } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+
+type Question = { id: string; title: string | null; question_text: string; mastery_score: number; status: string };
+type Chapter = { name: string; questions: Question[] };
+type Subject = { id: string; name: string; color: string; chapters: Chapter[] };
+
+export function OutlineView({ subjects }: { subjects: Subject[] }) {
+  const [openSubjects, setOpenSubjects] = useState<Record<string, boolean>>(() => Object.fromEntries(subjects.slice(0, 2).map((subject) => [subject.id, true])));
+  const [selected, setSelected] = useState<{ subject: Subject; chapter?: Chapter } | null>(null);
+  const totalQuestions = useMemo(() => subjects.reduce((sum, subject) => sum + subject.chapters.reduce((chapterSum, chapter) => chapterSum + chapter.questions.length, 0), 0), [subjects]);
+
+  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <section className="rounded-3xl border bg-card p-4 shadow-[0_18px_50px_rgb(24_32_51_/_0.05)] sm:p-6">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Learning workspace</p><h2 className="mt-1 text-xl font-semibold">你的學習結構</h2><p className="mt-1 text-sm text-muted-foreground">科目是根，章節是節點，錯題會自動連回它所屬的位置。</p></div><span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">{subjects.length} 個科目 · {totalQuestions} 題</span></div>
+      {!subjects.length && <div className="rounded-2xl border border-dashed p-10 text-center"><Sparkles className="mx-auto size-7 text-primary" /><p className="mt-3 font-medium">先新增第一題，建立你的學習地圖</p></div>}
+      <div className="space-y-2">{subjects.map((subject) => { const isOpen = Boolean(openSubjects[subject.id]); const subjectQuestions = subject.chapters.reduce((sum, chapter) => sum + chapter.questions.length, 0); return <div key={subject.id} className="overflow-hidden rounded-2xl border bg-background/35"><button type="button" onClick={() => setOpenSubjects((current) => ({ ...current, [subject.id]: !isOpen }))} className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-accent/50"><span className="flex size-9 items-center justify-center rounded-xl text-white" style={{ backgroundColor: subject.color }}><Circle className="size-4 fill-current" /></span><span className="min-w-0 flex-1"><strong className="block truncate">{subject.name}</strong><small className="text-muted-foreground">{subject.chapters.length} 個節點 · {subjectQuestions} 題</small></span>{isOpen ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}</button>{isOpen && <div className="border-t px-3 pb-3 pt-2">{subject.chapters.map((chapter) => { const score = chapter.questions.length ? Math.round(chapter.questions.reduce((sum, question) => sum + question.mastery_score, 0) / chapter.questions.length) : 0; return <button key={chapter.name} type="button" onClick={() => setSelected({ subject, chapter })} className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-accent"><span className="ml-1 h-8 w-px bg-border group-hover:bg-primary" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{chapter.name}</span><span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><span>{chapter.questions.length} 題</span><span>·</span><span>{score}% 熟練度</span></span></span><Progress value={score} className="hidden h-1.5 w-20 sm:block" /></button>})}<Link href={`/questions/new?subject=${subject.id}`} className="mt-1 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-primary hover:bg-secondary"><Plus className="size-3.5" />在此科目新增錯題</Link></div>}</div>})}</div>
+    </section>
+    <aside className="h-fit rounded-3xl border bg-card p-5 shadow-[0_18px_50px_rgb(24_32_51_/_0.05)] sm:p-6">{selected ? <><div className="flex items-start justify-between gap-3"><div><Badge variant="secondary">{selected.subject.name}</Badge><h3 className="mt-3 text-lg font-semibold">{selected.chapter?.name}</h3><p className="mt-1 text-sm text-muted-foreground">這個節點下的錯題</p></div><span className="rounded-xl bg-primary/10 p-2 text-primary"><FileQuestion className="size-5" /></span></div><div className="mt-5 space-y-2">{selected.chapter?.questions.map((question) => <Link key={question.id} href={`/questions/${question.id}`} className="block rounded-xl border p-3 transition hover:border-primary/40 hover:bg-accent/50"><p className="line-clamp-2 text-sm font-medium">{question.title || question.question_text}</p><p className="mt-1 text-xs text-muted-foreground">熟練度 {question.mastery_score}% · {question.status === "mastered" ? "已掌握" : "需要複習"}</p></Link>)}</div><Button asChild className="mt-5 w-full"><Link href={`/questions/new?subject=${selected.subject.id}&chapter=${encodeURIComponent(selected.chapter?.name ?? "")}`}><Plus />新增到這個節點</Link></Button></> : <div className="py-8 text-center"><Sparkles className="mx-auto size-7 text-primary" /><h3 className="mt-3 font-semibold">點擊一個節點</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">查看節點下的錯題、熟練度與下一步複習。</p></div>}</aside>
+  </div>;
+}
