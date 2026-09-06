@@ -18,6 +18,7 @@ export type LocalOutlineNode = {
   subject_id: string;
   parent_id: string | null;
   name: string;
+  color: string | null;
   content: string;
   position_x: number;
   position_y: number;

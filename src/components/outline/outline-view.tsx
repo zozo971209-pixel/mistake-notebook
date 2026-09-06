@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileQuestion, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Pencil, Plus, RotateCcw, Trash2, ZoomIn } from "lucide-react";
+import { ColorPicker, OUTLINE_COLORS } from "@/components/outline/color-picker";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalOutlineNode } from "@/lib/local-data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const COLORS = ["#7c3aed", "#2563eb", "#0891b2", "#059669", "#c2410c", "#be185d"];
 const WORLD_WIDTH = 3200;
 const WORLD_HEIGHT = 2200;
 const MIN_SCALE = 0.25;
@@ -29,7 +29,9 @@ export function OutlineView() {
   const data = useLocalData();
   const [subjectId, setSubjectId] = useState("");
   const [subjectName, setSubjectName] = useState("");
+  const [subjectColor, setSubjectColor] = useState<string>(OUTLINE_COLORS[0]);
   const [nodeName, setNodeName] = useState("");
+  const [nodeColor, setNodeColor] = useState<string>(OUTLINE_COLORS[1]);
   const [parentId, setParentId] = useState("root");
   const [message, setMessage] = useState("");
   const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
@@ -63,9 +65,11 @@ export function OutlineView() {
 
   async function addSubject() {
     try {
-      const id = await data.createSubject(subjectName, COLORS[data.subjects.length % COLORS.length]);
+      const id = await data.createSubject(subjectName, subjectColor);
       setSubjectId(id);
       setSubjectName("");
+      setNodeColor(subjectColor);
+      setSubjectColor(OUTLINE_COLORS[(data.subjects.length + 1) % OUTLINE_COLORS.length]);
       setMessage("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "無法新增科目。");
@@ -75,7 +79,7 @@ export function OutlineView() {
   async function addNode() {
     if (!subject) return;
     try {
-      const id = await data.createNode(subject.id, nodeName, parentId === "root" ? null : parentId);
+      const id = await data.createNode(subject.id, nodeName, parentId === "root" ? null : parentId, nodeColor);
       setNodeName("");
       setParentId("root");
       setMessage("");
@@ -162,19 +166,21 @@ export function OutlineView() {
     <section className="rounded-2xl border bg-card p-3 sm:p-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto scrollbar-hidden">
-          {data.subjects.map((item) => <button key={item.id} type="button" onClick={() => { setSubjectId(item.id); setParentId("root"); }} className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${item.id === effectiveSubjectId ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent/50"}`}><span className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</button>)}
+          {data.subjects.map((item) => <button key={item.id} type="button" onClick={() => { setSubjectId(item.id); setParentId("root"); setNodeColor(item.color); }} className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${item.id === effectiveSubjectId ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent/50"}`}><span className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</button>)}
         </div>
         <div className="flex gap-2">
           <Input className="min-w-0 sm:w-48" value={subjectName} onChange={(event) => setSubjectName(event.target.value)} placeholder="新增科目" onKeyDown={(event) => { if (event.key === "Enter") void addSubject(); }} />
+          <ColorPicker value={subjectColor} onChange={setSubjectColor} label="新科目顏色" />
           <Button variant="outline" onClick={() => void addSubject()} disabled={!subjectName.trim()}><Plus />科目</Button>
         </div>
       </div>
-      {subject && <div className="mt-3 grid gap-2 border-t pt-3 md:grid-cols-[minmax(0,1fr)_220px_auto]">
+      {subject && <div className="mt-3 grid gap-2 border-t pt-3 md:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
         <Input value={nodeName} onChange={(event) => setNodeName(event.target.value)} placeholder="新增知識節點，例如：函數與圖形" onKeyDown={(event) => { if (event.key === "Enter") void addNode(); }} />
         <Select value={parentId} onValueChange={setParentId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="root">連到科目根節點</SelectItem>{nodes.map((node) => <SelectItem key={node.id} value={node.id}>連到：{node.name}</SelectItem>)}</SelectContent></Select>
+        <ColorPicker value={nodeColor} onChange={setNodeColor} label="新節點顏色" />
         <Button onClick={() => void addNode()} disabled={!nodeName.trim()}><Plus />新增節點</Button>
       </div>}
-      {subject && <div className="mt-2 flex justify-end gap-1"><Button variant="ghost" size="sm" onClick={() => { const name = window.prompt("新的科目名稱", subject.name); if (name?.trim()) void data.updateSubject(subject.id, { name: name.trim() }); }}><Pencil />重新命名科目</Button><Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => { if (window.confirm(`刪除「${subject.name}」？節點會移除，原有錯題會保留並改為未分類。`)) { void data.deleteSubject(subject.id); setSubjectId(""); } }}><Trash2 />刪除科目</Button></div>}
+      {subject && <div className="mt-2 flex flex-wrap items-center justify-end gap-1"><span className="mr-1 text-xs text-muted-foreground">科目設定</span><ColorPicker value={subject.color} onChange={(color) => { void data.updateSubject(subject.id, { color }); setNodeColor(color); }} label={`${subject.name}顏色`} /><Button variant="ghost" size="sm" onClick={() => { const name = window.prompt("新的科目名稱", subject.name); if (name?.trim()) void data.updateSubject(subject.id, { name: name.trim() }); }}><Pencil />重新命名科目</Button><Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => { if (window.confirm(`刪除「${subject.name}」？節點會移除，原有錯題會保留並改為未分類。`)) { void data.deleteSubject(subject.id); setSubjectId(""); } }}><Trash2 />刪除科目</Button></div>}
       {message && <p className="mt-3 text-sm text-destructive">{message}</p>}
     </section>
 
@@ -204,14 +210,14 @@ export function OutlineView() {
               const x2 = current.x;
               const y2 = current.y + NODE_HEIGHT / 2;
               const bend = Math.max(45, (x2 - x1) / 2);
-              return <path key={node.id} d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} fill="none" stroke={subject.color} strokeOpacity="0.38" strokeWidth="3" vectorEffect="non-scaling-stroke" />;
+              return <path key={node.id} d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} fill="none" stroke={node.color ?? subject.color} strokeOpacity="0.38" strokeWidth="3" vectorEffect="non-scaling-stroke" />;
             })}
           </svg>
           <div className="absolute flex items-center gap-3 rounded-2xl border-2 bg-card px-4 py-3 shadow-md" style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }}>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: subject.color }}><MapIcon className="size-5" /></span>
             <div className="min-w-0"><strong className="block truncate">{subject.name}</strong><small className="text-muted-foreground">{nodes.length} 節點 · {subjectQuestionCount} 題</small></div>
           </div>
-          {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${subject.color}` }}>
+          {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; const color = node.color ?? subject.color; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
             <span className="line-clamp-2 pr-6 text-sm font-semibold leading-5">{node.name}</span>
             <span className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><FileQuestion className="size-3.5" />{count} 道錯題</span>
             <Grip className="absolute right-3 top-3 size-4 text-muted-foreground/45 group-hover:text-muted-foreground" />

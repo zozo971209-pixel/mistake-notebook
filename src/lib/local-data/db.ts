@@ -82,6 +82,7 @@ export async function loadLocalSnapshot(): Promise<LocalSnapshot> {
     subjects: subjects.sort((a, b) => a.sort_order - b.sort_order),
     nodes: nodes.map((node, index) => ({
       ...node,
+      color: typeof node.color === "string" ? node.color : null,
       position_x: Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250,
       position_y: Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110,
       resources: Array.isArray(node.resources) ? node.resources : [],
@@ -159,6 +160,7 @@ export function parseBackup(value: unknown): LearningMapBackup {
   if (reviews.some((review) => !questionIds.has(review.question_id))) throw new Error("備份包含找不到題目的複習紀錄。");
   questions.forEach((question) => { question.answer_config ||= emptyAnswerConfig; });
   nodes.forEach((node, index) => {
+    node.color = typeof node.color === "string" ? node.color : null;
     node.position_x = Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250;
     node.position_y = Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110;
     node.resources = Array.isArray(node.resources) ? node.resources : [];

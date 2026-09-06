@@ -144,6 +144,44 @@
   display: none;
 }
 
+.rich-editor {
+  font-size: 1rem;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.rich-editor:empty::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.rich-editor p,
+.rich-editor div {
+  margin-block: 0 0.75rem;
+}
+
+.rich-editor ul,
+.rich-editor ol {
+  margin-block: 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.rich-editor ul {
+  list-style: disc;
+}
+
+.rich-editor ol {
+  list-style: decimal;
+}
+
+.rich-editor blockquote {
+  border-left: 3px solid #a5b4fc;
+  color: #475569;
+  margin-block: 1rem;
+  padding-left: 1rem;
+}
+
 @media (min-width: 768px) {
   html {
     scrollbar-width: none;

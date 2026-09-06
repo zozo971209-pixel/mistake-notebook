@@ -39,8 +39,8 @@ type LocalDataContextValue = LocalSnapshot & {
   createSubject: (name: string, color: string) => Promise<string>;
   updateSubject: (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "sort_order">>) => Promise<void>;
   deleteSubject: (id: string) => Promise<void>;
-  createNode: (subjectId: string, name: string, parentId?: string | null) => Promise<string>;
-  updateNode: (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => Promise<void>;
+  createNode: (subjectId: string, name: string, parentId?: string | null, color?: string | null) => Promise<string>;
+  updateNode: (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "color" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => Promise<void>;
   updateNodes: (items: Array<{ id: string; position_x: number; position_y: number }>) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
   updateSettings: (changes: Partial<Pick<LocalSettings, "daily_review_target" | "preferred_model">>) => Promise<void>;
@@ -85,7 +85,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     if (existing) return existing.id;
     const timestamp = now();
     const siblings = snapshot.nodes.filter((item) => item.subject_id === subjectId && item.parent_id === null);
-    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: null, name, content: "", position_x: 360, position_y: 150 + siblings.length * 110, resources: [], sort_order: snapshot.nodes.filter((item) => item.subject_id === subjectId).length + 1, created_at: timestamp, updated_at: timestamp };
+    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: null, name, color: null, content: "", position_x: 360, position_y: 150 + siblings.length * 110, resources: [], sort_order: snapshot.nodes.filter((item) => item.subject_id === subjectId).length + 1, created_at: timestamp, updated_at: timestamp };
     await putLocal("nodes", node);
     return node.id;
   }, [snapshot.nodes]);
@@ -172,15 +172,15 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     await refresh();
   }, [refresh, snapshot.nodes, snapshot.questions]);
 
-  const createNode = useCallback(async (subjectId: string, name: string, parentId: string | null = null) => {
+  const createNode = useCallback(async (subjectId: string, name: string, parentId: string | null = null, color: string | null = null) => {
     const clean = name.trim(); if (!clean) throw new Error("請輸入節點名稱。");
     const timestamp = now();
     const siblings = snapshot.nodes.filter((item) => item.subject_id === subjectId && item.parent_id === parentId);
     const parent = parentId ? snapshot.nodes.find((item) => item.id === parentId) : null;
-    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: parentId, name: clean, content: "", position_x: parent ? parent.position_x + 260 : 360, position_y: parent ? parent.position_y + siblings.length * 110 : 150 + siblings.length * 110, resources: [], sort_order: siblings.length + 1, created_at: timestamp, updated_at: timestamp };
+    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: parentId, name: clean, color, content: "", position_x: parent ? parent.position_x + 260 : 360, position_y: parent ? parent.position_y + siblings.length * 110 : 150 + siblings.length * 110, resources: [], sort_order: siblings.length + 1, created_at: timestamp, updated_at: timestamp };
     await putLocal("nodes", node); await refresh(); return node.id;
   }, [refresh, snapshot.nodes]);
-  const updateNode = useCallback(async (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => {
+  const updateNode = useCallback(async (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "color" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => {
     const current = snapshot.nodes.find((item) => item.id === id); if (!current) return;
     const updated = { ...current, ...changes, updated_at: now() };
     await putLocal("nodes", updated);

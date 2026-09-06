@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, ShieldAlert, Smartphone, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LearningMapBackup } from "@/lib/local-data/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -123,14 +123,8 @@ export function GeminiGuide() {
   return <div className="space-y-5">
     <Card><CardHeader><CardTitle>取得 Gemini API Key</CardTitle></CardHeader><CardContent className="space-y-5 text-sm leading-7">
       <Alert><ShieldAlert /><AlertDescription>帳戶需符合年滿 18 歲資格才可申請與使用 Gemini API Key；若帳戶資料有誤，請先至 Google 帳戶設定確認後再申請。</AlertDescription></Alert>
-      <ol className="space-y-4"><GuideStep n="1" title="開啟 Google AI Studio">使用自己的 Google 帳號開啟 API Keys 頁面。</GuideStep><GuideStep n="2" title="建立專用專案與 Key">按 Create API key，建議使用只供此網站使用的專案，不要共用重要或高額付費專案。</GuideStep><GuideStep n="3" title="確認模型與額度">查看 Billing Tier 與 Rate Limits；模型、帳戶與地區的可用額度可能不同。</GuideStep><GuideStep n="4" title="回到本站測試">貼入 Key 並按「測試並套用」。Key 僅保存在你的瀏覽器。</GuideStep></ol>
-      <div className="flex flex-wrap gap-2 border-t pt-4"><Button asChild variant="outline"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">前往 AI Studio<ExternalLink /></a></Button><Button asChild variant="ghost"><a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noreferrer">官方額度說明<ExternalLink /></a></Button></div>
-    </CardContent></Card>
-    <Card><CardHeader><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary"><Smartphone /></span><div><CardTitle>免費層與裝置端替代方案</CardTitle><CardDescription>目前可用狀況會隨模型、瀏覽器與裝置而不同。</CardDescription></div></div></CardHeader><CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
-      <p><strong className="text-foreground">Gemini API：</strong>Google 官方目前仍列出 Free Tier，但沒有公布統一的免費層終止日期；實際可用模型與額度請以 AI Studio 專案頁面為準。</p>
-      <p><strong className="text-foreground">Chrome 內建 AI：</strong>部分 Chrome 裝置可下載 Gemini Nano 並在瀏覽器端執行，但功能與裝置支援仍有限，不能當成所有使用者都可用的掃描替代品。</p>
-      <p><strong className="text-foreground">Android／Apple 內建 AI：</strong>可在支援裝置的原生 App 中執行，但一般網站不能直接共用手機系統模型。若未來製作 Android 或 iOS App，可再加入為免 API 成本的選項。</p>
-      <div className="flex flex-wrap gap-2 pt-2"><Button asChild size="sm" variant="outline"><a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noreferrer">Gemini 定價<ExternalLink /></a></Button><Button asChild size="sm" variant="outline"><a href="https://developer.chrome.com/docs/ai/built-in" target="_blank" rel="noreferrer">Chrome 內建 AI<ExternalLink /></a></Button><Button asChild size="sm" variant="outline"><a href="https://developers.google.com/ml-kit/genai" target="_blank" rel="noreferrer">Android 裝置端 AI<ExternalLink /></a></Button><Button asChild size="sm" variant="outline"><a href="https://developer.apple.com/documentation/FoundationModels/" target="_blank" rel="noreferrer">Apple Foundation Models<ExternalLink /></a></Button></div>
+      <ol className="space-y-4"><GuideStep n="1" title="開啟 Google AI Studio">使用自己的 Google 帳號開啟 API Keys 頁面。</GuideStep><GuideStep n="2" title="建立專用專案與複製 Key">按 Create API key 並複製，建議使用只供此網站使用的專案，不要共用重要或高額付費專案。</GuideStep><GuideStep n="3" title="確認模型與額度">查看 Billing Tier 與 Rate Limits；模型、帳戶與地區的可用額度可能不同。</GuideStep><GuideStep n="4" title="回到本站測試">貼入 Key 並按「測試並套用」。Key 僅保存在你的瀏覽器。</GuideStep></ol>
+      <div className="flex flex-wrap gap-2 border-t pt-4"><Button asChild variant="outline"><a href="https://aistudio.google.com/api-keys" target="_blank" rel="noreferrer">前往 AI Studio<ExternalLink /></a></Button><Button asChild variant="ghost"><a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noreferrer">官方額度說明<ExternalLink /></a></Button></div>
     </CardContent></Card>
   </div>;
 }
