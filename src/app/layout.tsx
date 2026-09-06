@@ -7,6 +7,8 @@ export const metadata: Metadata = {
     template: "%s｜學習地圖",
   },
   description: "自由整理科目架構，讓每一道錯題連回真正需要補強的知識節點。",
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/app-icon.svg", apple: "/app-icon.svg" },
 };
 
 export default function RootLayout({

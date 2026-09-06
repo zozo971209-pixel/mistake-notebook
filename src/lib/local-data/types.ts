@@ -8,6 +8,8 @@ export type LocalSubject = {
   id: string;
   name: string;
   color: string;
+  content: string;
+  resources: LocalNodeResource[];
   sort_order: number;
   created_at: string;
   updated_at: string;

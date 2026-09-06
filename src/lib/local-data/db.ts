@@ -53,7 +53,7 @@ async function seedDefaults(database: IDBDatabase) {
   const transaction = database.transaction(["subjects", "settings"], "readwrite");
   if (existing === 0) {
     DEFAULT_SUBJECTS.forEach(([name, color], index) => transaction.objectStore("subjects").put({
-      id: crypto.randomUUID(), name, color, sort_order: index + 1, created_at: now, updated_at: now,
+      id: crypto.randomUUID(), name, color, content: "", resources: [], sort_order: index + 1, created_at: now, updated_at: now,
     } satisfies LocalSubject));
   }
   const settings = await requestResult(transaction.objectStore("settings").get("app"));
@@ -79,7 +79,11 @@ export async function loadLocalSnapshot(): Promise<LocalSnapshot> {
   ]);
   database.close();
   return {
-    subjects: subjects.sort((a, b) => a.sort_order - b.sort_order),
+    subjects: subjects.map((subject) => ({
+      ...subject,
+      content: typeof subject.content === "string" ? subject.content : "",
+      resources: Array.isArray(subject.resources) ? subject.resources : [],
+    })).sort((a, b) => a.sort_order - b.sort_order),
     nodes: nodes.map((node, index) => ({
       ...node,
       color: typeof node.color === "string" ? node.color : null,
@@ -159,6 +163,10 @@ export function parseBackup(value: unknown): LearningMapBackup {
   if (questions.some((question) => question.subject_id && !subjectIds.has(question.subject_id))) throw new Error("備份包含找不到科目的錯題。");
   if (reviews.some((review) => !questionIds.has(review.question_id))) throw new Error("備份包含找不到題目的複習紀錄。");
   questions.forEach((question) => { question.answer_config ||= emptyAnswerConfig; });
+  subjects.forEach((subject) => {
+    subject.content = typeof subject.content === "string" ? subject.content : "";
+    subject.resources = Array.isArray(subject.resources) ? subject.resources : [];
+  });
   nodes.forEach((node, index) => {
     node.color = typeof node.color === "string" ? node.color : null;
     node.position_x = Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250;

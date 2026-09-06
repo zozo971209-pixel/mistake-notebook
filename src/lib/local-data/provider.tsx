@@ -37,7 +37,7 @@ type LocalDataContextValue = LocalSnapshot & {
   assignQuestions: (items: Array<{ id: string; subjectId: string; chapter: string }>) => Promise<void>;
   recordReview: (input: { questionId: string; result: ReviewResult; answer: string; usedHint: boolean; durationSeconds: number }) => Promise<void>;
   createSubject: (name: string, color: string) => Promise<string>;
-  updateSubject: (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "sort_order">>) => Promise<void>;
+  updateSubject: (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "content" | "resources" | "sort_order">>) => Promise<void>;
   deleteSubject: (id: string) => Promise<void>;
   createNode: (subjectId: string, name: string, parentId?: string | null, color?: string | null) => Promise<string>;
   updateNode: (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "color" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => Promise<void>;
@@ -158,10 +158,10 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     if (!clean) throw new Error("請輸入科目名稱。");
     if (snapshot.subjects.some((item) => item.name === clean)) throw new Error("已有相同名稱的科目。");
     const timestamp = now();
-    const subject: LocalSubject = { id: crypto.randomUUID(), name: clean, color, sort_order: snapshot.subjects.length + 1, created_at: timestamp, updated_at: timestamp };
+    const subject: LocalSubject = { id: crypto.randomUUID(), name: clean, color, content: "", resources: [], sort_order: snapshot.subjects.length + 1, created_at: timestamp, updated_at: timestamp };
     await putLocal("subjects", subject); await refresh(); return subject.id;
   }, [refresh, snapshot.subjects]);
-  const updateSubject = useCallback(async (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "sort_order">>) => {
+  const updateSubject = useCallback(async (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "content" | "resources" | "sort_order">>) => {
     const current = snapshot.subjects.find((item) => item.id === id); if (!current) return;
     await putLocal("subjects", { ...current, ...changes, updated_at: now() }); await refresh();
   }, [refresh, snapshot.subjects]);

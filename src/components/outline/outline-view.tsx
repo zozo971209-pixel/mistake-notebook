@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileQuestion, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Pencil, Plus, RotateCcw, Trash2, ZoomIn } from "lucide-react";
+import { FileQuestion, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
 import { ColorPicker, OUTLINE_COLORS } from "@/components/outline/color-picker";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalOutlineNode } from "@/lib/local-data/types";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const WORLD_WIDTH = 3200;
@@ -23,6 +25,7 @@ type Viewport = { x: number; y: number; scale: number };
 type DragState =
   | { mode: "pan"; pointerId: number; startX: number; startY: number; originX: number; originY: number }
   | { mode: "node"; pointerId: number; nodeId: string; startX: number; startY: number; originX: number; originY: number; moved: boolean };
+type PinchState = { distance: number; scale: number; worldX: number; worldY: number };
 
 export function OutlineView() {
   const router = useRouter();
@@ -37,7 +40,11 @@ export function OutlineView() {
   const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
   const [moving, setMoving] = useState<Record<string, { x: number; y: number }>>({});
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSubjectDialogOpen, setIsSubjectDialogOpen] = useState(false);
   const dragRef = useRef<DragState | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<PinchState | null>(null);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -52,6 +59,25 @@ export function OutlineView() {
       window.removeEventListener("keydown", leaveFullscreen);
     };
   }, [isFullscreen]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = map.getBoundingClientRect();
+      setViewport((current) => {
+        const scale = clamp(current.scale * Math.exp(-event.deltaY * 0.0015), MIN_SCALE, MAX_SCALE);
+        const localX = event.clientX - rect.left;
+        const localY = event.clientY - rect.top;
+        const worldX = (localX - current.x) / current.scale;
+        const worldY = (localY - current.y) / current.scale;
+        return { x: localX - worldX * scale, y: localY - worldY * scale, scale };
+      });
+    };
+    map.addEventListener("wheel", handleWheel, { passive: false });
+    return () => map.removeEventListener("wheel", handleWheel);
+  }, []);
 
   const effectiveSubjectId = data.subjects.some((item) => item.id === subjectId) ? subjectId : data.subjects[0]?.id ?? "";
   const subject = data.subjects.find((item) => item.id === effectiveSubjectId) ?? null;
@@ -68,6 +94,7 @@ export function OutlineView() {
       const id = await data.createSubject(subjectName, subjectColor);
       setSubjectId(id);
       setSubjectName("");
+      setIsSubjectDialogOpen(false);
       setNodeColor(subjectColor);
       setSubjectColor(OUTLINE_COLORS[(data.subjects.length + 1) % OUTLINE_COLORS.length]);
       setMessage("");
@@ -100,13 +127,39 @@ export function OutlineView() {
     dragRef.current = { mode: "node", pointerId: event.pointerId, nodeId: node.id, startX: event.clientX, startY: event.clientY, originX: position.x, originY: position.y, moved: false };
   }
 
+  function beginTouch(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch") return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...pointersRef.current.values()];
+    if (points.length !== 2) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const centerX = (points[0].x + points[1].x) / 2 - rect.left;
+    const centerY = (points[0].y + points[1].y) / 2 - rect.top;
+    pinchRef.current = { distance: pointDistance(points[0], points[1]), scale: viewport.scale, worldX: (centerX - viewport.x) / viewport.scale, worldY: (centerY - viewport.y) / viewport.scale };
+    dragRef.current = null;
+  }
+
   function beginPan(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || event.target !== event.currentTarget) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (pinchRef.current) return;
     dragRef.current = { mode: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: viewport.x, originY: viewport.y };
   }
 
   function movePointer(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "touch" && pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const points = [...pointersRef.current.values()];
+      const pinch = pinchRef.current;
+      if (pinch && points.length >= 2) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const centerX = (points[0].x + points[1].x) / 2 - rect.left;
+        const centerY = (points[0].y + points[1].y) / 2 - rect.top;
+        const scale = clamp(pinch.scale * pointDistance(points[0], points[1]) / Math.max(pinch.distance, 1), MIN_SCALE, MAX_SCALE);
+        setViewport({ x: centerX - pinch.worldX * scale, y: centerY - pinch.worldY * scale, scale });
+        return;
+      }
+    }
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.mode === "pan") {
@@ -120,7 +173,16 @@ export function OutlineView() {
   }
 
   async function endPointer(event: React.PointerEvent<HTMLDivElement>) {
+    const wasPinching = Boolean(pinchRef.current);
+    if (event.pointerType === "touch") {
+      pointersRef.current.delete(event.pointerId);
+      if (pointersRef.current.size < 2) pinchRef.current = null;
+    }
     const drag = dragRef.current;
+    if (wasPinching) {
+      dragRef.current = null;
+      return;
+    }
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
     if (drag.mode !== "node") return;
@@ -164,15 +226,9 @@ export function OutlineView() {
 
   return <div className="space-y-4">
     <section className="rounded-2xl border bg-card p-3 sm:p-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto scrollbar-hidden">
-          {data.subjects.map((item) => <button key={item.id} type="button" onClick={() => { setSubjectId(item.id); setParentId("root"); setNodeColor(item.color); }} className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-sm transition ${item.id === effectiveSubjectId ? "border-primary bg-primary/10 text-primary" : "hover:bg-accent/50"}`}><span className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</button>)}
-        </div>
-        <div className="flex gap-2">
-          <Input className="min-w-0 sm:w-48" value={subjectName} onChange={(event) => setSubjectName(event.target.value)} placeholder="新增科目" onKeyDown={(event) => { if (event.key === "Enter") void addSubject(); }} />
-          <ColorPicker value={subjectColor} onChange={setSubjectColor} label="新科目顏色" />
-          <Button variant="outline" onClick={() => void addSubject()} disabled={!subjectName.trim()}><Plus />科目</Button>
-        </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-[220px] flex-1 space-y-1.5 sm:max-w-sm"><Label htmlFor="subject-selector">目前科目</Label><Select value={effectiveSubjectId} onValueChange={(value) => { setSubjectId(value); setParentId("root"); const nextSubject = data.subjects.find((item) => item.id === value); if (nextSubject) setNodeColor(nextSubject.color); }}><SelectTrigger id="subject-selector" className="h-10 w-full"><SelectValue placeholder="選擇科目" /></SelectTrigger><SelectContent>{data.subjects.map((item) => <SelectItem key={item.id} value={item.id}><span className="size-2.5 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</SelectItem>)}</SelectContent></Select></div>
+        <Button variant="outline" className="h-10" onClick={() => setIsSubjectDialogOpen(true)}><Plus />新增科目</Button>
       </div>
       {subject && <div className="mt-3 grid gap-2 border-t pt-3 md:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
         <Input value={nodeName} onChange={(event) => setNodeName(event.target.value)} placeholder="新增知識節點，例如：函數與圖形" onKeyDown={(event) => { if (event.key === "Enter") void addNode(); }} />
@@ -180,23 +236,24 @@ export function OutlineView() {
         <ColorPicker value={nodeColor} onChange={setNodeColor} label="新節點顏色" />
         <Button onClick={() => void addNode()} disabled={!nodeName.trim()}><Plus />新增節點</Button>
       </div>}
-      {subject && <div className="mt-2 flex flex-wrap items-center justify-end gap-1"><span className="mr-1 text-xs text-muted-foreground">科目設定</span><ColorPicker value={subject.color} onChange={(color) => { void data.updateSubject(subject.id, { color }); setNodeColor(color); }} label={`${subject.name}顏色`} /><Button variant="ghost" size="sm" onClick={() => { const name = window.prompt("新的科目名稱", subject.name); if (name?.trim()) void data.updateSubject(subject.id, { name: name.trim() }); }}><Pencil />重新命名科目</Button><Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => { if (window.confirm(`刪除「${subject.name}」？節點會移除，原有錯題會保留並改為未分類。`)) { void data.deleteSubject(subject.id); setSubjectId(""); } }}><Trash2 />刪除科目</Button></div>}
       {message && <p className="mt-3 text-sm text-destructive">{message}</p>}
     </section>
 
+    <Dialog open={isSubjectDialogOpen} onOpenChange={setIsSubjectDialogOpen}><DialogContent><DialogHeader><DialogTitle>新增科目</DialogTitle><DialogDescription>建立新的科目根節點，之後可以加入內容、節點與錯題。</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="new-subject-name">科目名稱</Label><Input id="new-subject-name" value={subjectName} onChange={(event) => setSubjectName(event.target.value)} placeholder="例如：資訊科技" onKeyDown={(event) => { if (event.key === "Enter") void addSubject(); }} /></div><div className="space-y-2"><Label>科目顏色</Label><ColorPicker value={subjectColor} onChange={setSubjectColor} label="新科目顏色" /></div></div><DialogFooter><Button variant="outline" onClick={() => setIsSubjectDialogOpen(false)}>取消</Button><Button onClick={() => void addSubject()} disabled={!subjectName.trim()}><Plus />建立科目</Button></DialogFooter></DialogContent></Dialog>
+
     <section className={`overflow-hidden border bg-card shadow-sm ${isFullscreen ? "fixed inset-0 z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground"><Grip className="size-4" />拖曳節點調整脈絡；點一下節點開啟詳細內容。</div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground"><Grip className="size-4" />拖曳節點調整脈絡；滾輪或雙指縮放，點一下開啟內容。</div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" title="縮小" onClick={() => zoom(viewport.scale - 0.15)} disabled={viewport.scale <= MIN_SCALE}><Minus /></Button>
           <span className="w-12 text-center text-xs tabular-nums">{Math.round(viewport.scale * 100)}%</span>
           <Button variant="ghost" size="icon" title="放大" onClick={() => zoom(viewport.scale + 0.15)} disabled={viewport.scale >= MAX_SCALE}><ZoomIn /></Button>
           <Button variant="ghost" size="icon" title="回到起點" onClick={() => setViewport(INITIAL_VIEWPORT)}><Focus /></Button>
-          <Button variant="ghost" size="icon" title={isFullscreen ? "離開全螢幕" : "展開全螢幕"} aria-label={isFullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setIsFullscreen((current) => !current)}>{isFullscreen ? <Minimize2 /> : <Maximize2 />}</Button>
           <Button variant="outline" size="sm" onClick={() => void autoArrange()}><RotateCcw />自動排列</Button>
+          <Button size="icon" className="bg-amber-500 text-white shadow-sm hover:bg-amber-600" title={isFullscreen ? "離開全螢幕" : "展開全螢幕"} aria-label={isFullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setIsFullscreen((current) => !current)}>{isFullscreen ? <Minimize2 /> : <Maximize2 />}</Button>
         </div>
       </div>
-      <div className={`relative touch-none overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing ${isFullscreen ? "min-h-0 flex-1" : "h-[68vh] min-h-[540px]"}`} onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)} onWheel={(event) => { if (event.ctrlKey || event.metaKey) { event.preventDefault(); zoom(viewport.scale - event.deltaY * 0.0015); } }}>
+      <div ref={mapRef} className={`relative touch-none overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing ${isFullscreen ? "min-h-0 flex-1" : "h-[68vh] min-h-[540px]"}`} onPointerDownCapture={beginTouch} onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)}>
         {!subject ? <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">先新增一個科目。</div> : <div className="pointer-events-none absolute left-0 top-0" style={{ width: WORLD_WIDTH, height: WORLD_HEIGHT, transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`, transformOrigin: "0 0" }}>
           <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full overflow-visible" viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} shapeRendering="geometricPrecision">
             {nodes.map((node) => {
@@ -213,10 +270,10 @@ export function OutlineView() {
               return <path key={node.id} d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} fill="none" stroke={node.color ?? subject.color} strokeOpacity="0.38" strokeWidth="3" vectorEffect="non-scaling-stroke" />;
             })}
           </svg>
-          <div className="absolute flex items-center gap-3 rounded-2xl border-2 bg-card px-4 py-3 shadow-md" style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }}>
+          <button type="button" onClick={() => router.push(`/outline/subject/${subject.id}`)} className="pointer-events-auto absolute flex items-center gap-3 rounded-2xl border-2 bg-card px-4 py-3 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary" style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }} aria-label={`開啟${subject.name}科目內容`}>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: subject.color }}><MapIcon className="size-5" /></span>
             <div className="min-w-0"><strong className="block truncate">{subject.name}</strong><small className="text-muted-foreground">{nodes.length} 節點 · {subjectQuestionCount} 題</small></div>
-          </div>
+          </button>
           {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; const color = node.color ?? subject.color; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
             <span className="line-clamp-2 pr-6 text-sm font-semibold leading-5">{node.name}</span>
             <span className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><FileQuestion className="size-3.5" />{count} 道錯題</span>
@@ -230,4 +287,8 @@ export function OutlineView() {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function pointDistance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }

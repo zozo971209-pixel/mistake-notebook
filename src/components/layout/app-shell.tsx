@@ -6,6 +6,7 @@ import { BookOpenCheck, Home, Map, Menu, Plus, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { InstallPromptCapture } from "@/components/settings/install-app-card";
 
 const nav = [
   { href: "/dashboard", label: "首頁", icon: Home },
@@ -19,8 +20,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navigation = <nav className="grid gap-1">{nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}</nav>;
 
   return <div className="min-h-screen bg-background">
+    <InstallPromptCapture />
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-sidebar/95 p-5 shadow-[8px_0_30px_rgb(24_32_51_/_0.03)] backdrop-blur lg:flex lg:flex-col">
-      <Link href="/dashboard" className="mb-6 flex items-center gap-3 px-2"><span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Map className="size-5" /></span><strong>學習地圖</strong></Link>
+      <Link href="/dashboard" className="mb-6 flex items-center gap-3 px-2"><span className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-sm"><Map className="size-5" /></span><strong>學習地圖</strong></Link>
       <Button asChild className="mb-5 w-full justify-start"><Link href="/questions/new"><Plus />新增錯題</Link></Button>
       {navigation}
       <p className="mt-auto border-t px-2 pt-4 text-xs leading-5 text-muted-foreground">資料只保存在這個瀏覽器。</p>

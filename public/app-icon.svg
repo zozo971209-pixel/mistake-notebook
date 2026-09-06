@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="學習地圖">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <path d="M118 145c42-22 84-22 126 0v231c-42-22-84-22-126 0V145Zm150 0c42-22 84-22 126 0v231c-42-22-84-22-126 0V145Z" fill="none" stroke="#fff" stroke-width="28" stroke-linejoin="round"/>
+  <path d="M256 160v216" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+</svg>

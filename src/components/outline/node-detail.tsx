@@ -149,9 +149,9 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
   </div>;
 }
 
-const resourceLabels = { image: "圖片", video: "影片", link: "參考連結" } as const;
+export const resourceLabels = { image: "圖片", video: "影片", link: "參考連結" } as const;
 
-function ResourceCard({ resource, onDelete, compact = false }: { resource: LocalNodeResource; onDelete?: () => void; compact?: boolean }) {
+export function ResourceCard({ resource, onDelete, compact = false }: { resource: LocalNodeResource; onDelete?: () => void; compact?: boolean }) {
   const resourceUrl = safeUrl(resource.url);
   const embedUrl = resource.type === "video" && resourceUrl ? videoEmbedUrl(resourceUrl) : null;
   return <article className="overflow-hidden rounded-xl border bg-background">
@@ -169,14 +169,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div className="space-y-2"><Label>{label}</Label>{children}</div>;
 }
 
-function contentToEditorHtml(value: string) {
+export function contentToEditorHtml(value: string) {
   const content = value.trim();
   if (!content) return "";
   if (/<\/?[a-z][\s\S]*>/i.test(content)) return sanitizeRichHtml(content);
   return content.split(/\r?\n/).map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`).join("");
 }
 
-function sanitizeRichHtml(value: string) {
+export function sanitizeRichHtml(value: string) {
   const documentValue = new DOMParser().parseFromString(value, "text/html");
   const allowedTags = new Set(["P", "DIV", "BR", "B", "STRONG", "I", "EM", "U", "SPAN", "FONT", "UL", "OL", "LI", "BLOCKQUOTE", "H1", "H2", "H3"]);
   for (const element of Array.from(documentValue.body.querySelectorAll("*"))) {
@@ -197,7 +197,7 @@ function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
-function safeUrl(value: string) {
+export function safeUrl(value: string) {
   try {
     const url = new URL(value.trim());
     return ["http:", "https:"].includes(url.protocol) ? url.toString() : "";
