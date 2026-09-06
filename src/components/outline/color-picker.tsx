@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useState } from "react";
 import { Palette } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const OUTLINE_COLORS = [
   "#7c3aed",
@@ -18,20 +19,19 @@ export const OUTLINE_COLORS = [
 ] as const;
 
 export function ColorPicker({ value, onChange, label = "選擇顏色" }: { value: string; onChange: (color: string) => void; label?: string }) {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
 
   function choose(color: string) {
     onChange(color);
-    if (detailsRef.current) detailsRef.current.open = false;
+    setOpen(false);
   }
 
-  return <details ref={detailsRef} className="relative shrink-0">
-    <summary className="flex h-8 cursor-pointer list-none items-center gap-2 rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted" title={label}>
+  return <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger asChild><button type="button" className="flex h-8 shrink-0 cursor-pointer items-center gap-2 rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted" title={label} aria-label={label}>
       <span className="size-3.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: value }} />
       <Palette className="size-4 text-muted-foreground" />
-      <span className="sr-only">{label}</span>
-    </summary>
-    <div className="absolute right-0 z-40 mt-2 w-52 rounded-xl border bg-popover p-3 text-popover-foreground shadow-xl">
+    </button></PopoverTrigger>
+    <PopoverContent align="end" className="w-52">
       <p className="mb-2 text-xs font-medium">{label}</p>
       <div className="grid grid-cols-6 gap-2">
         {OUTLINE_COLORS.map((color) => <button key={color} type="button" aria-label={`選擇 ${color}`} className="size-6 rounded-full ring-1 ring-black/10 transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-primary" style={{ backgroundColor: color }} onClick={() => choose(color)} />)}
@@ -40,6 +40,6 @@ export function ColorPicker({ value, onChange, label = "選擇顏色" }: { value
           <span className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">+</span>
         </label>
       </div>
-    </div>
-  </details>;
+    </PopoverContent>
+  </Popover>;
 }

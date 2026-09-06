@@ -182,6 +182,120 @@
   padding-left: 1rem;
 }
 
+.learning-editor {
+  font-size: 1rem;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.learning-paragraph {
+  margin-bottom: 0.8rem;
+}
+
+.learning-h1,
+.learning-h2,
+.learning-h3 {
+  color: #182033;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.65rem;
+  margin-top: 1.5rem;
+}
+
+.learning-h1 { font-size: 2rem; }
+.learning-h2 { font-size: 1.55rem; }
+.learning-h3 { font-size: 1.2rem; }
+
+.learning-link {
+  color: #4338ca;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.learning-ul,
+.learning-ol {
+  margin-block: 0.75rem;
+  padding-left: 1.65rem;
+}
+
+.learning-ul { list-style: disc; }
+.learning-ol { list-style: decimal; }
+.learning-list-item { margin-block: 0.25rem; }
+.learning-nested-list-item { list-style: none; }
+
+.learning-check-checked,
+.learning-check-unchecked {
+  list-style: none;
+  margin-left: -1.4rem;
+  padding-left: 1.8rem;
+  position: relative;
+}
+
+.learning-check-checked::before,
+.learning-check-unchecked::before {
+  border: 1.5px solid #94a3b8;
+  border-radius: 0.3rem;
+  content: "";
+  height: 1rem;
+  left: 0;
+  position: absolute;
+  top: 0.42rem;
+  width: 1rem;
+}
+
+.learning-check-checked {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.learning-check-checked::before {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  box-shadow: inset 0 0 0 3px white;
+}
+
+.learning-quote {
+  background: #f8fafc;
+  border-left: 4px solid #a5b4fc;
+  border-radius: 0 0.75rem 0.75rem 0;
+  color: #475569;
+  margin-block: 1rem;
+  padding: 0.8rem 1rem;
+  white-space: pre-wrap;
+}
+
+.learning-annotation-mark {
+  background: #fef3c7;
+  border-bottom: 2px solid #f59e0b;
+  border-radius: 0.15rem;
+  cursor: help;
+}
+
+.learning-annotation-overlap {
+  background: #fde68a;
+  border-bottom-color: #d97706;
+}
+
+.learning-table {
+  border-collapse: collapse;
+  margin-block: 1rem;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.learning-table-cell,
+.learning-table-cell-header {
+  border: 1px solid #cbd5e1;
+  min-width: 5rem;
+  padding: 0.5rem;
+  vertical-align: top;
+}
+
+.learning-table-cell-header {
+  background: #f1f5f9;
+  font-weight: 600;
+}
+
 @media (min-width: 768px) {
   html {
     scrollbar-width: none;

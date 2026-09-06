@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileQuestion, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
 import { ColorPicker, OUTLINE_COLORS } from "@/components/outline/color-picker";
+import { SearchableParentSelect } from "@/components/outline/searchable-parent-select";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalOutlineNode } from "@/lib/local-data/types";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ export function OutlineView() {
   const mapRef = useRef<HTMLDivElement>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pinchRef = useRef<PinchState | null>(null);
+  const suppressNodeClickRef = useRef(false);
 
   useEffect(() => {
     if (!isFullscreen) return;
@@ -121,6 +123,7 @@ export function OutlineView() {
   }
 
   function beginNodeDrag(event: React.PointerEvent, node: LocalOutlineNode) {
+    if (event.pointerType === "touch" && !isFullscreen) return;
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     const position = positionOf(node);
@@ -128,7 +131,7 @@ export function OutlineView() {
   }
 
   function beginTouch(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "touch") return;
+    if (event.pointerType !== "touch" || !isFullscreen) return;
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     const points = [...pointersRef.current.values()];
     if (points.length !== 2) return;
@@ -141,6 +144,7 @@ export function OutlineView() {
 
   function beginPan(event: React.PointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || event.target !== event.currentTarget) return;
+    if (event.pointerType === "touch" && !isFullscreen) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     if (pinchRef.current) return;
     dragRef.current = { mode: "pan", pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: viewport.x, originY: viewport.y };
@@ -188,10 +192,9 @@ export function OutlineView() {
     if (drag.mode !== "node") return;
     const position = moving[drag.nodeId] ?? { x: drag.originX, y: drag.originY };
     if (drag.moved) {
+      suppressNodeClickRef.current = true;
       await data.updateNode(drag.nodeId, { position_x: Math.round(position.x), position_y: Math.round(position.y) });
       setMoving((current) => { const next = { ...current }; delete next[drag.nodeId]; return next; });
-    } else {
-      router.push(`/outline/${drag.nodeId}`);
     }
   }
 
@@ -232,7 +235,7 @@ export function OutlineView() {
       </div>
       {subject && <div className="mt-3 grid gap-2 border-t pt-3 md:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
         <Input value={nodeName} onChange={(event) => setNodeName(event.target.value)} placeholder="新增知識節點，例如：函數與圖形" onKeyDown={(event) => { if (event.key === "Enter") void addNode(); }} />
-        <Select value={parentId} onValueChange={setParentId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="root">連到科目根節點</SelectItem>{nodes.map((node) => <SelectItem key={node.id} value={node.id}>連到：{node.name}</SelectItem>)}</SelectContent></Select>
+        <SearchableParentSelect value={parentId} onChange={setParentId} options={[{ value: "root", label: `科目：${subject.name}`, keywords: `${subject.name} 根節點` }, ...nodes.map((node) => ({ value: node.id, label: `節點：${node.name}`, keywords: `${subject.name} ${node.name}` }))]} placeholder="搜尋科目或上層節點" />
         <ColorPicker value={nodeColor} onChange={setNodeColor} label="新節點顏色" />
         <Button onClick={() => void addNode()} disabled={!nodeName.trim()}><Plus />新增節點</Button>
       </div>}
@@ -243,7 +246,7 @@ export function OutlineView() {
 
     <section className={`overflow-hidden border bg-card shadow-sm ${isFullscreen ? "fixed inset-0 z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground"><Grip className="size-4" />拖曳節點調整脈絡；滾輪或雙指縮放，點一下開啟內容。</div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground"><Grip className="size-4" /><span className="hidden sm:inline">拖曳節點調整脈絡；滾輪縮放，點一下開啟內容。</span><span className="sm:hidden">點節點閱讀；展開全螢幕後可移動與縮放。</span></div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" title="縮小" onClick={() => zoom(viewport.scale - 0.15)} disabled={viewport.scale <= MIN_SCALE}><Minus /></Button>
           <span className="w-12 text-center text-xs tabular-nums">{Math.round(viewport.scale * 100)}%</span>
@@ -253,7 +256,7 @@ export function OutlineView() {
           <Button size="icon" className="bg-amber-500 text-white shadow-sm hover:bg-amber-600" title={isFullscreen ? "離開全螢幕" : "展開全螢幕"} aria-label={isFullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setIsFullscreen((current) => !current)}>{isFullscreen ? <Minimize2 /> : <Maximize2 />}</Button>
         </div>
       </div>
-      <div ref={mapRef} className={`relative touch-none overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing ${isFullscreen ? "min-h-0 flex-1" : "h-[68vh] min-h-[540px]"}`} onPointerDownCapture={beginTouch} onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)}>
+      <div ref={mapRef} style={{ touchAction: isFullscreen ? "none" : "auto" }} className={`relative overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing ${isFullscreen ? "min-h-0 flex-1" : "h-[68vh] min-h-[540px]"}`} onPointerDownCapture={beginTouch} onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)}>
         {!subject ? <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">先新增一個科目。</div> : <div className="pointer-events-none absolute left-0 top-0" style={{ width: WORLD_WIDTH, height: WORLD_HEIGHT, transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`, transformOrigin: "0 0" }}>
           <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full overflow-visible" viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} shapeRendering="geometricPrecision">
             {nodes.map((node) => {
@@ -274,7 +277,7 @@ export function OutlineView() {
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: subject.color }}><MapIcon className="size-5" /></span>
             <div className="min-w-0"><strong className="block truncate">{subject.name}</strong><small className="text-muted-foreground">{nodes.length} 節點 · {subjectQuestionCount} 題</small></div>
           </button>
-          {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; const color = node.color ?? subject.color; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
+          {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; const color = node.color ?? subject.color; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} onClick={() => { if (suppressNodeClickRef.current) { suppressNodeClickRef.current = false; return; } router.push(`/outline/${node.id}`); }} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
             <span className="line-clamp-2 pr-6 text-sm font-semibold leading-5">{node.name}</span>
             <span className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><FileQuestion className="size-3.5" />{count} 道錯題</span>
             <Grip className="absolute right-3 top-3 size-4 text-muted-foreground/45 group-hover:text-muted-foreground" />

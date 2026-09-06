@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Bold, ExternalLink, FileQuestion, Highlighter, ImageIcon, Italic, Link2, List, PanelRightClose, PanelRightOpen, Plus, Save, Trash2, Video } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileQuestion, ImageIcon, Link2, PanelRightClose, PanelRightOpen, Plus, Save, Trash2, Video } from "lucide-react";
 import { ColorPicker } from "@/components/outline/color-picker";
+import { LearningEditor } from "@/components/outline/learning-editor";
+import { SearchableParentSelect } from "@/components/outline/searchable-parent-select";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalNodeResource, LocalOutlineNode, LocalSubject } from "@/lib/local-data/types";
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +29,6 @@ export function NodeDetail({ nodeId }: { nodeId: string }) {
 function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalSubject }) {
   const router = useRouter();
   const data = useLocalData();
-  const editorRef = useRef<HTMLDivElement>(null);
-  const selectionRef = useRef<Range | null>(null);
   const nodeId = node.id;
   const linkedQuestions = data.questions.filter((question) => question.node_id === nodeId);
   const [name, setName] = useState(node.name);
@@ -42,10 +42,6 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
   const [childColor, setChildColor] = useState(node.color ?? subject.color);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = contentToEditorHtml(node.content);
-  }, [node.content, node.id]);
 
   const blockedParentIds = useMemo(() => {
     const blocked = new Set([nodeId]);
@@ -61,9 +57,8 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
 
   async function save() {
     if (!name.trim()) return setMessage("節點名稱不能空白。");
-    const content = sanitizeRichHtml(editorRef.current?.innerHTML ?? "");
-    await data.updateNode(node.id, { name: name.trim(), color, content, parent_id: parentId === "root" ? null : parentId, resources });
-    setMessage("節點內容已儲存於這個瀏覽器。");
+    await data.updateNode(node.id, { name: name.trim(), color, parent_id: parentId === "root" ? null : parentId, resources });
+    setMessage("節點設定已儲存於這個瀏覽器；白紙內容會自動儲存。");
   }
 
   function addResource() {
@@ -81,48 +76,23 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
     router.push(`/outline/${id}`);
   }
 
-  function rememberSelection() {
-    const selection = window.getSelection();
-    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) selectionRef.current = selection.getRangeAt(0).cloneRange();
-  }
-
-  function format(command: string, value?: string) {
-    const selection = window.getSelection();
-    if (selectionRef.current && selection) {
-      selection.removeAllRanges();
-      selection.addRange(selectionRef.current);
-    }
-    editorRef.current?.focus();
-    document.execCommand(command, false, value);
-    rememberSelection();
-  }
-
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <Button asChild variant="ghost" className="-ml-3"><Link href="/outline"><ArrowLeft />回到學習地圖</Link></Button>
-      <div className="flex gap-2"><Button variant="outline" onClick={() => setSidebarOpen((open) => !open)}>{sidebarOpen ? <PanelRightClose /> : <PanelRightOpen />}{sidebarOpen ? "專注閱讀" : "顯示側欄"}</Button><Button onClick={() => void save()}><Save />儲存節點</Button></div>
+      <div className="flex gap-2"><Button variant="outline" onClick={() => setSidebarOpen((open) => !open)}>{sidebarOpen ? <PanelRightClose /> : <PanelRightOpen />}{sidebarOpen ? "專注閱讀" : "顯示側欄"}</Button><Button onClick={() => void save()}><Save />儲存設定</Button></div>
     </div>
     {message && <p className="rounded-xl bg-secondary px-4 py-3 text-sm text-secondary-foreground">{message}</p>}
 
     <div className={`grid gap-5 ${sidebarOpen ? "xl:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}>
       <Card className="overflow-hidden bg-muted/25 py-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-card px-3 py-2 sm:px-4">
-          <div className="flex items-center gap-1">
-            <Button type="button" variant="ghost" size="icon" title="粗體" aria-label="粗體" onMouseDown={(event) => { event.preventDefault(); format("bold"); }}><Bold /></Button>
-            <Button type="button" variant="ghost" size="icon" title="斜體" aria-label="斜體" onMouseDown={(event) => { event.preventDefault(); format("italic"); }}><Italic /></Button>
-            <Button type="button" variant="ghost" size="icon" title="螢光筆" aria-label="螢光筆" onMouseDown={(event) => { event.preventDefault(); format("hiliteColor", "#fef08a"); }}><Highlighter /></Button>
-            <Button type="button" variant="ghost" size="icon" title="項目符號" aria-label="項目符號" onMouseDown={(event) => { event.preventDefault(); format("insertUnorderedList"); }}><List /></Button>
-            <Select defaultValue="3" onValueChange={(value) => format("fontSize", value)}><SelectTrigger className="ml-1 w-28" aria-label="字體大小"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="2">小字</SelectItem><SelectItem value="3">一般</SelectItem><SelectItem value="4">大字</SelectItem><SelectItem value="5">標題</SelectItem></SelectContent></Select>
-          </div>
-          <span className="text-xs text-muted-foreground">選取文字後套用格式</span>
-        </div>
-        <div className="p-3 sm:p-8">
-          <article className="mx-auto min-h-[72vh] max-w-[880px] bg-white px-6 py-8 text-slate-900 shadow-[0_10px_35px_rgb(31_41_55_/_0.10)] sm:px-12 sm:py-12">
-            <div className="mb-8 border-b pb-5" style={{ borderColor: color }}><Badge variant="outline" style={{ borderColor: subject.color, color: subject.color }}>{subject.name}</Badge><h1 className="mt-3 text-3xl font-semibold tracking-tight">{name || "未命名節點"}</h1><p className="mt-2 text-sm text-slate-500">點擊下方白紙即可閱讀或編輯內容。</p></div>
-            <div ref={editorRef} contentEditable suppressContentEditableWarning role="textbox" aria-label="節點內容" aria-multiline="true" className="rich-editor min-h-[420px] outline-none" data-placeholder="輸入概念、公式、例題、容易混淆之處…" onInput={rememberSelection} onKeyUp={rememberSelection} onMouseUp={rememberSelection} />
-            {resources.length > 0 && <section className="mt-10 border-t pt-7"><h2 className="mb-4 text-lg font-semibold">延伸資料</h2><div className="grid gap-4 md:grid-cols-2">{resources.map((resource) => <ResourceCard key={resource.id} resource={resource} />)}</div></section>}
-          </article>
-        </div>
+        <LearningEditor
+          documentId={`node-${node.id}`}
+          initialContent={node.content}
+          placeholder="輸入概念、公式、例題、容易混淆之處…"
+          onSave={(content) => data.updateNode(node.id, { content })}
+          header={<div className="mb-8 border-b pb-5" style={{ borderColor: color }}><Badge variant="outline" style={{ borderColor: subject.color, color: subject.color }}>{subject.name}</Badge><h1 className="mt-3 text-3xl font-semibold tracking-tight">{name || "未命名節點"}</h1><p className="mt-2 text-sm text-slate-500">內容會自動儲存；選取文字可加入個人注釋。</p></div>}
+          footer={resources.length > 0 ? <section className="mt-10 border-t pt-7"><h2 className="mb-4 text-lg font-semibold">延伸資料</h2><div className="grid gap-4 md:grid-cols-2">{resources.map((resource) => <ResourceCard key={resource.id} resource={resource} />)}</div></section> : undefined}
+        />
       </Card>
 
       {sidebarOpen && <aside className="space-y-5 xl:sticky xl:top-8 xl:self-start">
@@ -136,7 +106,7 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
 
         <Card><CardHeader><CardTitle>節點設定</CardTitle><CardDescription>調整節點名稱、位置、顏色與延伸資料。</CardDescription></CardHeader><CardContent className="space-y-4">
           <Field label="節點名稱"><Input value={name} onChange={(event) => setName(event.target.value)} /></Field>
-          <Field label="上層節點"><Select value={parentId} onValueChange={setParentId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="root">{subject.name}（科目根節點）</SelectItem>{data.nodes.filter((item) => item.subject_id === node.subject_id && !blockedParentIds.has(item.id)).map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select></Field>
+          <Field label="上層節點"><SearchableParentSelect value={parentId} onChange={setParentId} options={[{ value: "root", label: `${subject.name}（科目根節點）`, keywords: subject.name }, ...data.nodes.filter((item) => item.subject_id === node.subject_id && !blockedParentIds.has(item.id)).map((item) => ({ value: item.id, label: item.name, keywords: subject.name }))]} /></Field>
           <Field label="節點顏色"><div className="flex items-center gap-3"><ColorPicker value={color} onChange={setColor} label="節點顏色" /><span className="text-xs text-muted-foreground">選擇色票或自訂顏色</span></div></Field>
           <div className="border-t pt-4"><h3 className="text-sm font-semibold">圖片、影片與參考連結</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">只保存網址；載入時會連線到來源網站。</p></div>
           <div className="grid gap-2"><Select value={resourceType} onValueChange={(value) => setResourceType(value as LocalNodeResource["type"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="image">圖片</SelectItem><SelectItem value="video">影片</SelectItem><SelectItem value="link">參考連結</SelectItem></SelectContent></Select><Input value={resourceTitle} onChange={(event) => setResourceTitle(event.target.value)} placeholder="名稱（選填）" /><Input type="url" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://…" /><Button type="button" variant="outline" onClick={addResource} disabled={!resourceUrl.trim()}><Plus />加入延伸資料</Button></div>
@@ -167,34 +137,6 @@ export function ResourceCard({ resource, onDelete, compact = false }: { resource
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-2"><Label>{label}</Label>{children}</div>;
-}
-
-export function contentToEditorHtml(value: string) {
-  const content = value.trim();
-  if (!content) return "";
-  if (/<\/?[a-z][\s\S]*>/i.test(content)) return sanitizeRichHtml(content);
-  return content.split(/\r?\n/).map((line) => `<p>${escapeHtml(line) || "<br>"}</p>`).join("");
-}
-
-export function sanitizeRichHtml(value: string) {
-  const documentValue = new DOMParser().parseFromString(value, "text/html");
-  const allowedTags = new Set(["P", "DIV", "BR", "B", "STRONG", "I", "EM", "U", "SPAN", "FONT", "UL", "OL", "LI", "BLOCKQUOTE", "H1", "H2", "H3"]);
-  for (const element of Array.from(documentValue.body.querySelectorAll("*"))) {
-    if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED"].includes(element.tagName)) { element.remove(); continue; }
-    if (!allowedTags.has(element.tagName)) { element.replaceWith(...Array.from(element.childNodes)); continue; }
-    const size = element.getAttribute("size") ?? "";
-    const backgroundColor = (element as HTMLElement).style.backgroundColor;
-    const fontSize = (element as HTMLElement).style.fontSize;
-    for (const attribute of Array.from(element.attributes)) element.removeAttribute(attribute.name);
-    if (element.tagName === "FONT" && /^[2-5]$/.test(size)) element.setAttribute("size", size);
-    if (/^(#[0-9a-f]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)|yellow)$/i.test(backgroundColor)) (element as HTMLElement).style.backgroundColor = backgroundColor;
-    if (/^(12|14|16|18|20|24|28|32)px$/.test(fontSize)) (element as HTMLElement).style.fontSize = fontSize;
-  }
-  return documentValue.body.innerHTML;
-}
-
-function escapeHtml(value: string) {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 export function safeUrl(value: string) {
