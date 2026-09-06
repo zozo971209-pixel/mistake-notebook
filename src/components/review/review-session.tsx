@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronRight, Eye, Lightbulb, RotateCcw, X } from "lucide-react";
-import type { Tables } from "@/types/database";
-import { recordReviewAction } from "@/app/(app)/review/actions";
+import type { LocalQuestion } from "@/lib/local-data/types";
+import { useLocalData } from "@/lib/local-data/provider";
 import { evaluateStructuredAnswer, formatStructuredAnswer, parseAnswerConfig } from "@/lib/questions/answer-config";
 import { StructuredAnswerInput } from "@/components/questions/structured-answer";
 import { AnswerStructureDisplay } from "@/components/questions/answer-structure-display";
@@ -15,10 +15,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 
-type ReviewQuestion = Tables<"questions"> & { subjects: { name: string; color: string } | null };
+type ReviewQuestion = LocalQuestion & { subjects: { name: string; color: string } | null };
 type Result = "wrong" | "hard" | "correct" | "easy";
 
 export function ReviewSession({ initialQuestions }: { initialQuestions: ReviewQuestion[] }) {
+  const { recordReview } = useLocalData();
   const [questions, setQuestions] = useState(initialQuestions);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -39,9 +40,13 @@ export function ReviewSession({ initialQuestions }: { initialQuestions: ReviewQu
     if (!question) return;
     setBusy(true);
     const submittedAnswer = answerConfig.kind === "fill_blank" ? blankValues.join("｜") : formatStructuredAnswer(answerConfig, selectedIds, answer);
-    const response = await recordReviewAction({ questionId: question.id, result, answer: submittedAnswer, usedHint, durationSeconds: startedAt ? (Date.now() - startedAt) / 1000 : 0 });
+    try {
+      await recordReview({ questionId: question.id, result, answer: submittedAnswer, usedHint, durationSeconds: startedAt ? (Date.now() - startedAt) / 1000 : 0 });
+    } catch (error) {
+      setBusy(false);
+      return setMessage(error instanceof Error ? error.message : "無法儲存複習紀錄。");
+    }
     setBusy(false);
-    if (response.error) return setMessage(response.error);
     if (result === "wrong") setQuestions((current) => [...current, question]);
     setIndex((current) => current + 1);
     setRevealed(false);

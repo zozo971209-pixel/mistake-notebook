@@ -3,10 +3,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "個人錯誤題庫",
-    template: "%s｜個人錯誤題庫",
+    default: "學習地圖",
+    template: "%s｜學習地圖",
   },
-  description: "把拍下來的錯題轉成可搜尋、可重做、會安排複習的個人學習系統。",
+  description: "自由整理科目架構，讓每一道錯題連回真正需要補強的知識節點。",
 };
 
 export default function RootLayout({

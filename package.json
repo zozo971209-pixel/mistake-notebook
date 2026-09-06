@@ -12,14 +12,12 @@
   "dependencies": {
     "@google/genai": "2.13.0",
     "@hookform/resolvers": "5.4.0",
-    "@supabase/ssr": "0.12.3",
-    "@supabase/supabase-js": "2.110.8",
     "browser-image-compression": "2.0.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "date-fns": "4.4.0",
     "lucide-react": "1.25.0",
-    "next": "16.2.11",
+    "next": "16.3.4",
     "radix-ui": "1.6.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -37,13 +35,13 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.11",
-    "supabase": "2.109.1",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "8.5.10",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.24",
     "sharp": "0.35.0"
   }
 }

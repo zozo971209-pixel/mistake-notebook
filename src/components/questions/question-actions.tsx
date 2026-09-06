@@ -4,29 +4,26 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, Pencil, Trash2 } from "lucide-react";
-import { deleteQuestionAction, toggleFavoriteAction } from "@/app/(app)/questions/actions";
+import { useLocalData } from "@/lib/local-data/provider";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export function QuestionActions({ id, favorite }: { id: string; favorite: boolean }) {
   const router = useRouter();
+  const { deleteQuestion, toggleFavorite } = useLocalData();
   const [pending, setPending] = useState(false);
 
   async function remove() {
     setPending(true);
-    const result = await deleteQuestionAction(id);
+    await deleteQuestion(id);
     setPending(false);
-    if (!result.error) {
-      router.replace("/questions");
-      router.refresh();
-    }
+    router.replace("/questions");
   }
 
   async function favoriteToggle() {
     setPending(true);
-    await toggleFavoriteAction(id, !favorite);
+    await toggleFavorite(id);
     setPending(false);
-    router.refresh();
   }
 
   return (

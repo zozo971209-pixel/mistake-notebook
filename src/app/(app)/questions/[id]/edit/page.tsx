@@ -1,16 +1,16 @@
-import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { QuestionForm } from "@/components/questions/question-form";
+import { useLocalData } from "@/lib/local-data/provider";
+import { Button } from "@/components/ui/button";
 
-export const metadata = { title: "編輯錯題" };
-
-export default async function EditQuestionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const [{ data: question }, { data: subjects }] = await Promise.all([
-    supabase.from("questions").select("*").eq("id", id).single(),
-    supabase.from("subjects").select("*").order("sort_order"),
-  ]);
-  if (!question) notFound();
-  return <div className="space-y-6"><div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">編輯錯題</h1><p className="mt-2 text-sm text-muted-foreground">修正題目、答案與錯因。</p></div><QuestionForm subjects={subjects ?? []} initial={question} /></div>;
+export default function EditQuestionPage() {
+  const params = useParams<{ id: string }>();
+  const { ready, questions, subjects } = useLocalData();
+  if (!ready) return <p className="text-sm text-muted-foreground">正在讀取題目…</p>;
+  const question = questions.find((item) => item.id === params.id);
+  if (!question) return <div><p>找不到題目。</p><Button asChild><Link href="/questions">回題庫</Link></Button></div>;
+  return <div className="space-y-6"><div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">編輯錯題</h1><p className="mt-2 text-sm text-muted-foreground">修正題目、答案、錯因與學習節點。</p></div><QuestionForm subjects={subjects} initial={question} /></div>;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bot, Loader2, Send, UserRound } from "lucide-react";
 import { AI_AGE_CONFIRMATION_KEY, AI_AGE_ERROR, AI_AGE_HEADER } from "@/lib/ai/age";
+import type { LocalQuestion } from "@/lib/local-data/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,11 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 type Message = { role: "user" | "assistant"; content: string };
 
-export function AiTutor({ questionId }: { questionId: string }) {
+export function AiTutor({ question }: { question: LocalQuestion }) {
   const [mode, setMode] = useState("hint");
   const [text, setText] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [conversationId, setConversationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
@@ -41,11 +41,11 @@ export function AiTutor({ questionId }: { questionId: string }) {
     setMessages((current) => [...current, { role: "user", content: prompt }]);
     setText("");
     const key = sessionStorage.getItem("mistake_notebook_gemini_key");
-    const response = await fetch("/api/ai/tutor", { method: "POST", headers: { "Content-Type": "application/json", [AI_AGE_HEADER]: "1", ...(key ? { "x-gemini-api-key": key } : {}) }, body: JSON.stringify({ questionId, conversationId, mode, message: prompt }) });
-    const result = await response.json() as { answer?: string; conversationId?: string; error?: string };
+    const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
+    const response = await fetch("/api/ai/tutor", { method: "POST", headers: { "Content-Type": "application/json", [AI_AGE_HEADER]: "1", ...(key ? { "x-gemini-api-key": key } : {}), ...(model ? { "x-gemini-model": model } : {}) }, body: JSON.stringify({ mode, message: prompt, question: { questionText: question.question_text, correctAnswer: question.correct_answer ?? "", solution: question.solution_text ?? "", originalAnswer: question.original_answer ?? "", errorNote: question.error_note ?? "" } }) });
+    const result = await response.json() as { answer?: string; error?: string };
     setBusy(false);
     if (!response.ok || !result.answer) return setError(result.error ?? "AI 回覆失敗");
-    setConversationId(result.conversationId ?? conversationId);
     setMessages((current) => [...current, { role: "assistant", content: result.answer! }]);
   }
 

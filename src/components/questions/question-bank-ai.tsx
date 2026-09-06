@@ -2,16 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { Bot, Check, Loader2, Sparkles, WandSparkles, X } from "lucide-react";
-import { applyQuestionAssignmentsAction } from "@/app/(app)/questions/actions";
+import { useLocalData } from "@/lib/local-data/provider";
+import type { LocalQuestion, LocalSubject } from "@/lib/local-data/types";
 import { AI_AGE_HEADER } from "@/lib/ai/age";
 import { AI_AGE_CONFIRMATION_KEY } from "@/lib/ai/age";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-type Candidate = { id: string; title: string | null; question_text: string; subject_id: string | null; chapter: string | null };
-type Subject = { id: string; name: string };
-
-export function QuestionBankAI({ questions, subjects }: { questions: Candidate[]; subjects: Subject[] }) {
+export function QuestionBankAI({ questions, subjects }: { questions: LocalQuestion[]; subjects: LocalSubject[] }) {
+  const { assignQuestions } = useLocalData();
   const candidates = useMemo(() => questions.filter((q) => !q.subject_id || !q.chapter?.trim()), [questions]);
   const [selected, setSelected] = useState<string[]>([]);
   const [preview, setPreview] = useState<Array<{ id: string; subject: string; chapter: string; confidence: number; reason: string }>>([]);
@@ -25,7 +24,8 @@ export function QuestionBankAI({ questions, subjects }: { questions: Candidate[]
     setBusy(true); setMessage("");
     try {
       const key = sessionStorage.getItem("mistake_notebook_gemini_key");
-      const response = await fetch("/api/ai/classify-questions", { method: "POST", headers: { "Content-Type": "application/json", [AI_AGE_HEADER]: "1", ...(key ? { "x-gemini-api-key": key } : {}) }, body: JSON.stringify({ subjects: subjects.map((s) => s.name), questions: candidates.filter((q) => selected.includes(q.id)).map((q) => ({ id: q.id, title: q.title ?? "", questionText: q.question_text })) }) });
+      const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
+      const response = await fetch("/api/ai/classify-questions", { method: "POST", headers: { "Content-Type": "application/json", [AI_AGE_HEADER]: "1", ...(key ? { "x-gemini-api-key": key } : {}), ...(model ? { "x-gemini-model": model } : {}) }, body: JSON.stringify({ subjects: subjects.map((s) => s.name), questions: candidates.filter((q) => selected.includes(q.id)).map((q) => ({ id: q.id, title: q.title ?? "", questionText: q.question_text })) }) });
       const payload = await response.json() as { assignments?: typeof preview; error?: string };
       if (!response.ok) throw new Error(payload.error ?? "AI 歸類失敗");
       setPreview(payload.assignments ?? []);
@@ -37,10 +37,14 @@ export function QuestionBankAI({ questions, subjects }: { questions: Candidate[]
     const assignments = preview.map((item) => ({ id: item.id, subjectId: subjectMap.get(item.subject) ?? "", chapter: item.chapter })).filter((item) => item.subjectId && item.chapter);
     if (!assignments.length) return setMessage("沒有可套用的有效歸類，請先確認科目名稱。");
     setBusy(true); setMessage("");
-    const result = await applyQuestionAssignmentsAction(assignments);
-    setBusy(false);
-    if (result.error) return setMessage(result.error);
-    window.location.reload();
+    try {
+      await assignQuestions(assignments);
+      setPreview([]);
+      setSelected([]);
+      setMessage("已套用 AI 建議，你仍可在題目編輯頁調整。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "無法套用歸類。");
+    } finally { setBusy(false); }
   }
 
   if (!candidates.length) return <div className="rounded-2xl border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground"><Sparkles className="mr-2 inline size-4 text-primary" />目前沒有缺少科目或節點的題目。</div>;

@@ -5,11 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Crop, Loader2, MapPin, PenLine, ScanText, ShieldCheck, X } from "lucide-react";
-import type { Tables } from "@/types/database";
+import type { LocalQuestion, LocalSubject } from "@/lib/local-data/types";
+import { useLocalData } from "@/lib/local-data/provider";
 import type { ExtractedQuestion, QuestionInput } from "@/lib/validations/question";
 import { answerKindLabels, parseAnswerConfig, type AnswerConfig } from "@/lib/questions/answer-config";
 import { AI_AGE_CONFIRMATION_KEY, AI_AGE_ERROR, AI_AGE_HEADER } from "@/lib/ai/age";
-import { createQuestionAction, updateQuestionAction } from "@/app/(app)/questions/actions";
 import { AnswerConfigEditor } from "@/components/questions/answer-config-editor";
 import { ImageCropDialog } from "@/components/questions/image-crop-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -22,14 +22,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-type Question = Tables<"questions">;
-type Subject = Tables<"subjects">;
+type Question = LocalQuestion;
+type Subject = LocalSubject;
 
 const commonErrors = ["概念不懂", "公式記錯", "題意理解錯誤", "計算錯誤", "看錯數字", "遺漏條件", "粗心", "時間不足", "知識點混淆"];
 const errorIcons: Record<string, string> = { "概念不懂": "🧠", "公式記錯": "📐", "題意理解錯誤": "📖", "計算錯誤": "🔢", "看錯數字": "👀", "遺漏條件": "🧩", "粗心": "⚠️", "時間不足": "⏱️", "知識點混淆": "🔀" };
 
 export function QuestionForm({ subjects, initial, defaultSubjectId = "", defaultChapter = "" }: { subjects: Subject[]; initial?: Question; defaultSubjectId?: string; defaultChapter?: string }) {
   const router = useRouter();
+  const { createQuestion, updateQuestion } = useLocalData();
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -132,12 +133,14 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
       body.append("image", compressed, "scan.webp");
       body.append("subjects", JSON.stringify(subjects.map((subject) => subject.name)));
       const key = sessionStorage.getItem("mistake_notebook_gemini_key");
+      const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
       const response = await fetch("/api/ai/extract-question", {
         method: "POST",
         body,
         headers: {
           [AI_AGE_HEADER]: "1",
           ...(key ? { "x-gemini-api-key": key } : {}),
+          ...(model ? { "x-gemini-model": model } : {}),
         },
       });
       const payload = await response.json() as { data?: ExtractedQuestion; error?: string };
@@ -196,14 +199,15 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
   async function save() {
     setSaving(true);
     setMessage("");
-    const result = initial ? await updateQuestionAction(initial.id, payload()) : await createQuestionAction(payload());
-    setSaving(false);
-    if (result.error) {
+    try {
+      const id = initial ? (await updateQuestion(initial.id, payload()), initial.id) : await createQuestion(payload());
+      router.push(`/questions/${id}`);
+    } catch (error) {
       setMessageKind("error");
-      return setMessage(result.error);
+      setMessage(error instanceof Error ? error.message : "無法儲存題目。");
+    } finally {
+      setSaving(false);
     }
-    router.push(`/questions/${result.id}`);
-    router.refresh();
   }
 
   return (
