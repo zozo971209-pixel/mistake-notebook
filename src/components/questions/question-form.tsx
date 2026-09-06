@@ -9,14 +9,12 @@ import type { LocalQuestion, LocalSubject } from "@/lib/local-data/types";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { ExtractedQuestion, QuestionInput } from "@/lib/validations/question";
 import { answerKindLabels, parseAnswerConfig, type AnswerConfig } from "@/lib/questions/answer-config";
-import { AI_AGE_CONFIRMATION_KEY, AI_AGE_ERROR, AI_AGE_HEADER } from "@/lib/ai/age";
 import { AnswerConfigEditor } from "@/components/questions/answer-config-editor";
 import { ImageCropDialog } from "@/components/questions/image-crop-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,7 +38,6 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [cropOpen, setCropOpen] = useState(false);
-  const [aiAgeConfirmed, setAiAgeConfirmed] = useState(false);
   const [step, setStep] = useState(initial ? 2 : 1);
   const [answerConfig, setAnswerConfig] = useState<AnswerConfig>(() => parseAnswerConfig(initial?.answer_config));
   const [isAiGenerated, setIsAiGenerated] = useState(initial?.is_ai_generated ?? false);
@@ -70,16 +67,6 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setAiAgeConfirmed(
-        window.localStorage.getItem(AI_AGE_CONFIRMATION_KEY) === "1",
-      );
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, []);
 
   function chooseFile(file?: File) {
     if (!file) return;
@@ -114,11 +101,6 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
   }
 
   async function scan() {
-    if (!aiAgeConfirmed) {
-      setMessageKind("error");
-      setMessage(AI_AGE_ERROR);
-      return;
-    }
     if (!selectedFile) {
       setMessageKind("error");
       setMessage("請先拍照或選擇一張題目圖片。");
@@ -138,7 +120,6 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
         method: "POST",
         body,
         headers: {
-          [AI_AGE_HEADER]: "1",
           ...(key ? { "x-gemini-api-key": key } : {}),
           ...(model ? { "x-gemini-model": model } : {}),
         },
@@ -214,7 +195,7 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
     <div className="mx-auto max-w-4xl space-y-6">
       {!initial && <div className="grid grid-cols-3 gap-2">{["輸入題目", "確認內容", "記錄錯因"].map((label, index) => <button type="button" key={label} onClick={() => index + 1 < step && setStep(index + 1)} className={`rounded-xl px-3 py-3 text-sm transition ${step === index + 1 ? "bg-primary text-primary-foreground" : step > index + 1 ? "bg-primary/10 text-primary" : "bg-muted/50 text-muted-foreground"}`}><span className="mr-2 font-mono">{index + 1}</span>{label}</button>)}</div>}
 
-      {step === 1 && !initial && <Card className="border-primary/20"><CardHeader><CardTitle>加入一道錯題</CardTitle><CardDescription>選擇最快的輸入方式，之後都能修改。</CardDescription></CardHeader><CardContent className="space-y-5"><input ref={fileRef} hidden type="file" accept="image/*" capture="environment" onChange={(event) => chooseFile(event.target.files?.[0])} />{previewUrl ? <div className="grid gap-5 md:grid-cols-[240px_1fr] md:items-center"><div className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-muted"><Image src={previewUrl} alt="待掃描題目預覽" fill unoptimized className="object-contain" /></div><div><Badge variant="secondary"><ShieldCheck />照片不保存</Badge><p className="mt-3 font-medium">照片準備好了</p><p className="mt-1 text-sm text-muted-foreground">掃描後會自動帶入題目、選項與最可能的科目。</p><div className="mt-4 flex items-start gap-3 rounded-xl bg-secondary/70 p-3"><Checkbox id="scan-age" checked={aiAgeConfirmed} onCheckedChange={(value) => { const confirmed = Boolean(value); setAiAgeConfirmed(confirmed); if (confirmed) localStorage.setItem(AI_AGE_CONFIRMATION_KEY, "1"); else localStorage.removeItem(AI_AGE_CONFIRMATION_KEY); }} /><Label htmlFor="scan-age" className="text-xs leading-5">我確認已年滿 18 歲，並了解此勾選只用來開放 Gemini AI 功能。</Label></div><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={() => void scan()} disabled={scanning || !aiAgeConfirmed}>{scanning ? <Loader2 className="animate-spin" /> : <ScanText />}{scanning ? "正在辨識…" : "掃描轉文字"}</Button><Button type="button" variant="outline" onClick={() => setCropOpen(true)}><Crop />裁切</Button><Button type="button" variant="ghost" onClick={clearSelectedFile}><X />移除</Button></div></div></div> : <div className="grid gap-4 sm:grid-cols-2"><button type="button" onClick={() => fileRef.current?.click()} className="group flex min-h-52 flex-col items-center justify-center rounded-2xl border border-primary/25 bg-primary/5 p-6 text-center transition hover:border-primary/50 hover:bg-primary/10"><span className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Camera /></span><span className="mt-4 text-lg font-semibold">拍照掃描</span><span className="mt-2 text-sm text-muted-foreground">限年滿 18 歲使用 AI 辨識</span></button><button type="button" onClick={() => setStep(2)} className="group flex min-h-52 flex-col items-center justify-center rounded-2xl border p-6 text-center transition hover:border-primary/40 hover:bg-accent/40"><span className="flex size-14 items-center justify-center rounded-2xl bg-muted text-foreground"><PenLine /></span><span className="mt-4 text-lg font-semibold">手動輸入</span><span className="mt-2 text-sm text-muted-foreground">不限年齡、不使用 AI</span></button></div>}{message && <Alert variant={messageKind === "error" ? "destructive" : "default"}><AlertDescription>{message}{scanWarnings.map((warning) => <span className="mt-1 block" key={warning}>• {warning}</span>)}</AlertDescription></Alert>}</CardContent></Card>}
+      {step === 1 && !initial && <Card className="border-primary/20"><CardHeader><CardTitle>加入一道錯題</CardTitle><CardDescription>選擇最快的輸入方式，之後都能修改。</CardDescription></CardHeader><CardContent className="space-y-5"><input ref={fileRef} hidden type="file" accept="image/*" capture="environment" onChange={(event) => chooseFile(event.target.files?.[0])} />{previewUrl ? <div className="grid gap-5 md:grid-cols-[240px_1fr] md:items-center"><div className="relative aspect-[4/3] overflow-hidden rounded-xl border bg-muted"><Image src={previewUrl} alt="待掃描題目預覽" fill unoptimized className="object-contain" /></div><div><Badge variant="secondary"><ShieldCheck />照片不保存</Badge><p className="mt-3 font-medium">照片準備好了</p><p className="mt-1 text-sm text-muted-foreground">掃描後會自動帶入題目、選項與最可能的科目。</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={() => void scan()} disabled={scanning}>{scanning ? <Loader2 className="animate-spin" /> : <ScanText />}{scanning ? "正在辨識…" : "掃描轉文字"}</Button><Button type="button" variant="outline" onClick={() => setCropOpen(true)}><Crop />裁切</Button><Button type="button" variant="ghost" onClick={clearSelectedFile}><X />移除</Button></div></div></div> : <div className="grid gap-4 sm:grid-cols-2"><button type="button" onClick={() => fileRef.current?.click()} className="group flex min-h-52 flex-col items-center justify-center rounded-2xl border border-primary/25 bg-primary/5 p-6 text-center transition hover:border-primary/50 hover:bg-primary/10"><span className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Camera /></span><span className="mt-4 text-lg font-semibold">拍照掃描</span><span className="mt-2 text-sm text-muted-foreground">需先在設定加入 API Key</span></button><button type="button" onClick={() => setStep(2)} className="group flex min-h-52 flex-col items-center justify-center rounded-2xl border p-6 text-center transition hover:border-primary/40 hover:bg-accent/40"><span className="flex size-14 items-center justify-center rounded-2xl bg-muted text-foreground"><PenLine /></span><span className="mt-4 text-lg font-semibold">手動輸入</span><span className="mt-2 text-sm text-muted-foreground">不使用 AI</span></button></div>}{message && <Alert variant={messageKind === "error" ? "destructive" : "default"}><AlertDescription>{message}{scanWarnings.map((warning) => <span className="mt-1 block" key={warning}>• {warning}</span>)}</AlertDescription></Alert>}</CardContent></Card>}
 
       {step === 2 && <Card><CardHeader><CardTitle>{initial ? "編輯題目" : "確認題目"}</CardTitle><CardDescription>先確認最重要的題目與作答方式。</CardDescription></CardHeader><CardContent className="space-y-5"><div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4"><div className="flex items-center gap-2 font-medium"><MapPin className="size-4 text-primary" />題目歸屬</div><p className="mt-1 text-sm text-muted-foreground">手動模式可直接把題目放入學習地圖的節點；AI 掃描只會提供建議，仍由你確認。</p><div className="mt-3 flex flex-wrap items-center gap-2 text-sm"><Badge variant={selectedSubjectName ? "default" : "outline"}>{selectedSubjectName || "尚未選科目"}</Badge><span className="text-muted-foreground">→</span><Badge variant={fields.chapter ? "secondary" : "outline"}>{fields.chapter || "尚未設定節點"}</Badge></div></div><div className="grid gap-4 sm:grid-cols-2"><Field label="科目（手動設定）"><Select value={fields.subjectId} onValueChange={(value) => update("subjectId", value)}><SelectTrigger><SelectValue placeholder="選擇科目" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select></Field><Field label="題目標題"><Input value={fields.title} onChange={(e) => update("title", e.target.value)} placeholder="例如：二次函數判別式" /></Field></div><Field label="題目文字"><Textarea rows={8} required value={fields.questionText} onChange={(e) => update("questionText", e.target.value)} placeholder="請輸入或掃描題目…" /></Field><AnswerConfigEditor value={answerConfig} onChange={setAnswerConfig} /><details className="group rounded-xl border bg-muted/10" open={!fields.chapter}><summary className="cursor-pointer list-none p-4 font-medium">節點與補充資料 <span className="ml-2 text-xs font-normal text-muted-foreground">手動輸入節點名稱，之後可在學習地圖展開</span></summary><div className="grid gap-4 border-t p-4 sm:grid-cols-3"><Field label="節點／章節"><Input value={fields.chapter} onChange={(e) => update("chapter", e.target.value)} placeholder="例如：一元二次方程式" /></Field><Field label="來源"><Input value={fields.source} onChange={(e) => update("source", e.target.value)} /></Field><Field label="難度"><Select value={fields.difficulty} onValueChange={(value) => update("difficulty", value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[1,2,3,4,5].map((n) => <SelectItem key={n} value={String(n)}>{n} / 5</SelectItem>)}</SelectContent></Select></Field></div></details></CardContent></Card>}
 

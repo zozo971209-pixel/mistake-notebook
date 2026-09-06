@@ -12,6 +12,7 @@ import {
   loadLocalSnapshot,
   parseBackup,
   putLocal,
+  putManyLocal,
 } from "@/lib/local-data/db";
 import type {
   LearningMapBackup,
@@ -39,7 +40,8 @@ type LocalDataContextValue = LocalSnapshot & {
   updateSubject: (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "sort_order">>) => Promise<void>;
   deleteSubject: (id: string) => Promise<void>;
   createNode: (subjectId: string, name: string, parentId?: string | null) => Promise<string>;
-  updateNode: (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "content" | "parent_id" | "sort_order">>) => Promise<void>;
+  updateNode: (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => Promise<void>;
+  updateNodes: (items: Array<{ id: string; position_x: number; position_y: number }>) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
   updateSettings: (changes: Partial<Pick<LocalSettings, "daily_review_target" | "preferred_model">>) => Promise<void>;
   exportBackup: () => LearningMapBackup;
@@ -82,7 +84,8 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     const existing = snapshot.nodes.find((node) => node.subject_id === subjectId && node.name === name);
     if (existing) return existing.id;
     const timestamp = now();
-    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: null, name, content: "", sort_order: snapshot.nodes.filter((item) => item.subject_id === subjectId).length + 1, created_at: timestamp, updated_at: timestamp };
+    const siblings = snapshot.nodes.filter((item) => item.subject_id === subjectId && item.parent_id === null);
+    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: null, name, content: "", position_x: 360, position_y: 150 + siblings.length * 110, resources: [], sort_order: snapshot.nodes.filter((item) => item.subject_id === subjectId).length + 1, created_at: timestamp, updated_at: timestamp };
     await putLocal("nodes", node);
     return node.id;
   }, [snapshot.nodes]);
@@ -172,10 +175,12 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const createNode = useCallback(async (subjectId: string, name: string, parentId: string | null = null) => {
     const clean = name.trim(); if (!clean) throw new Error("請輸入節點名稱。");
     const timestamp = now();
-    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: parentId, name: clean, content: "", sort_order: snapshot.nodes.filter((item) => item.subject_id === subjectId && item.parent_id === parentId).length + 1, created_at: timestamp, updated_at: timestamp };
+    const siblings = snapshot.nodes.filter((item) => item.subject_id === subjectId && item.parent_id === parentId);
+    const parent = parentId ? snapshot.nodes.find((item) => item.id === parentId) : null;
+    const node: LocalOutlineNode = { id: crypto.randomUUID(), subject_id: subjectId, parent_id: parentId, name: clean, content: "", position_x: parent ? parent.position_x + 260 : 360, position_y: parent ? parent.position_y + siblings.length * 110 : 150 + siblings.length * 110, resources: [], sort_order: siblings.length + 1, created_at: timestamp, updated_at: timestamp };
     await putLocal("nodes", node); await refresh(); return node.id;
   }, [refresh, snapshot.nodes]);
-  const updateNode = useCallback(async (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "content" | "parent_id" | "sort_order">>) => {
+  const updateNode = useCallback(async (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "content" | "parent_id" | "position_x" | "position_y" | "resources" | "sort_order">>) => {
     const current = snapshot.nodes.find((item) => item.id === id); if (!current) return;
     const updated = { ...current, ...changes, updated_at: now() };
     await putLocal("nodes", updated);
@@ -184,6 +189,15 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     }
     await refresh();
   }, [refresh, snapshot.nodes, snapshot.questions]);
+  const updateNodes = useCallback(async (items: Array<{ id: string; position_x: number; position_y: number }>) => {
+    const timestamp = now();
+    const updates = items.flatMap((item) => {
+      const current = snapshot.nodes.find((node) => node.id === item.id);
+      return current ? [{ ...current, position_x: item.position_x, position_y: item.position_y, updated_at: timestamp }] : [];
+    });
+    await putManyLocal("nodes", updates);
+    await refresh();
+  }, [refresh, snapshot.nodes]);
   const deleteNode = useCallback(async (id: string) => {
     const children = snapshot.nodes.filter((item) => item.parent_id === id);
     for (const child of children) await putLocal("nodes", { ...child, parent_id: null, updated_at: now() });
@@ -195,7 +209,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     await putLocal("settings", { ...snapshot.settings, ...changes, id: "app", updated_at: now() }); await refresh();
   }, [refresh, snapshot.settings]);
 
-  const value = useMemo<LocalDataContextValue>(() => ({ ...snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createNode, updateNode, deleteNode, updateSettings, exportBackup: () => createBackup(snapshot), parseBackup, importBackup: async (backup, mode) => { await importBackup(backup, mode); await refresh(); }, clearAll: async () => { await clearLocalDatabase(); await refresh(); } }), [snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createNode, updateNode, deleteNode, updateSettings]);
+  const value = useMemo<LocalDataContextValue>(() => ({ ...snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createNode, updateNode, updateNodes, deleteNode, updateSettings, exportBackup: () => createBackup(snapshot), parseBackup, importBackup: async (backup, mode) => { await importBackup(backup, mode); await refresh(); }, clearAll: async () => { await clearLocalDatabase(); await refresh(); } }), [snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createNode, updateNode, updateNodes, deleteNode, updateSettings]);
 
   return <LocalDataContext.Provider value={value}>{children}</LocalDataContext.Provider>;
 }

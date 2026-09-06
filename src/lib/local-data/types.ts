@@ -19,9 +19,19 @@ export type LocalOutlineNode = {
   parent_id: string | null;
   name: string;
   content: string;
+  position_x: number;
+  position_y: number;
+  resources: LocalNodeResource[];
   sort_order: number;
   created_at: string;
   updated_at: string;
+};
+
+export type LocalNodeResource = {
+  id: string;
+  type: "image" | "video" | "link";
+  title: string;
+  url: string;
 };
 
 export type LocalQuestion = {

@@ -27,7 +27,7 @@ export default function QuestionsPage() {
   if (!ready) return <p className="text-sm text-muted-foreground">正在讀取本機題庫…</p>;
 
   return <div className="space-y-6">
-    <PageHeader eyebrow="CAPTURE & REVIEW" title="錯題庫" description="搜尋、重作，或把題目連到學習地圖的節點。" action={<Button asChild><Link href="/questions/new"><Plus />新增錯題</Link></Button>} />
+    <PageHeader title="錯題庫" description="搜尋、重作，或把題目連到學習地圖的節點。" action={<Button asChild><Link href="/questions/new"><Plus />新增錯題</Link></Button>} />
     <QuestionBankAI questions={questions} subjects={subjects} />
     <div className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-[1fr_180px]">
       <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="搜尋題目、標題或節點" /></div>

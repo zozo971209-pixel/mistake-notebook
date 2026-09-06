@@ -80,7 +80,12 @@ export async function loadLocalSnapshot(): Promise<LocalSnapshot> {
   database.close();
   return {
     subjects: subjects.sort((a, b) => a.sort_order - b.sort_order),
-    nodes: nodes.sort((a, b) => a.sort_order - b.sort_order),
+    nodes: nodes.map((node, index) => ({
+      ...node,
+      position_x: Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250,
+      position_y: Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110,
+      resources: Array.isArray(node.resources) ? node.resources : [],
+    })).sort((a, b) => a.sort_order - b.sort_order),
     questions: questions.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     reviews: reviews.sort((a, b) => Date.parse(b.reviewed_at) - Date.parse(a.reviewed_at)),
     settings,
@@ -91,6 +96,15 @@ export async function putLocal<T extends { id: string }>(store: StoreName, value
   const database = await openLocalDatabase();
   const transaction = database.transaction(store, "readwrite");
   transaction.objectStore(store).put(value);
+  await transactionDone(transaction);
+  database.close();
+}
+
+export async function putManyLocal<T extends { id: string }>(store: StoreName, values: T[]) {
+  if (!values.length) return;
+  const database = await openLocalDatabase();
+  const transaction = database.transaction(store, "readwrite");
+  values.forEach((value) => transaction.objectStore(store).put(value));
   await transactionDone(transaction);
   database.close();
 }
@@ -144,6 +158,11 @@ export function parseBackup(value: unknown): LearningMapBackup {
   if (questions.some((question) => question.subject_id && !subjectIds.has(question.subject_id))) throw new Error("備份包含找不到科目的錯題。");
   if (reviews.some((review) => !questionIds.has(review.question_id))) throw new Error("備份包含找不到題目的複習紀錄。");
   questions.forEach((question) => { question.answer_config ||= emptyAnswerConfig; });
+  nodes.forEach((node, index) => {
+    node.position_x = Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250;
+    node.position_y = Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110;
+    node.resources = Array.isArray(node.resources) ? node.resources : [];
+  });
   return value as unknown as LearningMapBackup;
 }
 

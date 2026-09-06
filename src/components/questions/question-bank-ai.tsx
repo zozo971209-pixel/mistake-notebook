@@ -4,8 +4,6 @@ import { useMemo, useState } from "react";
 import { Bot, Check, Loader2, Sparkles, WandSparkles, X } from "lucide-react";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalQuestion, LocalSubject } from "@/lib/local-data/types";
-import { AI_AGE_HEADER } from "@/lib/ai/age";
-import { AI_AGE_CONFIRMATION_KEY } from "@/lib/ai/age";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -20,12 +18,11 @@ export function QuestionBankAI({ questions, subjects }: { questions: LocalQuesti
 
   async function classify() {
     if (!selected.length) return setMessage("請先勾選要整理的題目。");
-    if (window.localStorage.getItem(AI_AGE_CONFIRMATION_KEY) !== "1") return setMessage("AI 歸類需要先在新增題目的 AI 使用確認中勾選年滿 18 歲；未確認時仍可手動整理節點。");
     setBusy(true); setMessage("");
     try {
       const key = sessionStorage.getItem("mistake_notebook_gemini_key");
       const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
-      const response = await fetch("/api/ai/classify-questions", { method: "POST", headers: { "Content-Type": "application/json", [AI_AGE_HEADER]: "1", ...(key ? { "x-gemini-api-key": key } : {}), ...(model ? { "x-gemini-model": model } : {}) }, body: JSON.stringify({ subjects: subjects.map((s) => s.name), questions: candidates.filter((q) => selected.includes(q.id)).map((q) => ({ id: q.id, title: q.title ?? "", questionText: q.question_text })) }) });
+      const response = await fetch("/api/ai/classify-questions", { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { "x-gemini-api-key": key } : {}), ...(model ? { "x-gemini-model": model } : {}) }, body: JSON.stringify({ subjects: subjects.map((s) => s.name), questions: candidates.filter((q) => selected.includes(q.id)).map((q) => ({ id: q.id, title: q.title ?? "", questionText: q.question_text })) }) });
       const payload = await response.json() as { assignments?: typeof preview; error?: string };
       if (!response.ok) throw new Error(payload.error ?? "AI 歸類失敗");
       setPreview(payload.assignments ?? []);
