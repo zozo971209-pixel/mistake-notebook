@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileQuestion, Focus, Grip, Map as MapIcon, Minus, Pencil, Plus, RotateCcw, Trash2, ZoomIn } from "lucide-react";
+import { FileQuestion, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Pencil, Plus, RotateCcw, Trash2, ZoomIn } from "lucide-react";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalOutlineNode } from "@/lib/local-data/types";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const COLORS = ["#7c3aed", "#2563eb", "#0891b2", "#059669", "#c2410c", "#be185d"];
-const WORLD_WIDTH = 1800;
-const WORLD_HEIGHT = 1400;
+const WORLD_WIDTH = 3200;
+const WORLD_HEIGHT = 2200;
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
+const INITIAL_VIEWPORT = { x: 16, y: 12, scale: 0.88 };
 const ROOT = { x: 70, y: 180, width: 190, height: 82 };
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 84;
@@ -29,9 +32,24 @@ export function OutlineView() {
   const [nodeName, setNodeName] = useState("");
   const [parentId, setParentId] = useState("root");
   const [message, setMessage] = useState("");
-  const [viewport, setViewport] = useState<Viewport>({ x: 16, y: 12, scale: 0.88 });
+  const [viewport, setViewport] = useState<Viewport>(INITIAL_VIEWPORT);
   const [moving, setMoving] = useState<Record<string, { x: number; y: number }>>({});
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const dragRef = useRef<DragState | null>(null);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    const leaveFullscreen = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsFullscreen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", leaveFullscreen);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", leaveFullscreen);
+    };
+  }, [isFullscreen]);
 
   const effectiveSubjectId = data.subjects.some((item) => item.id === subjectId) ? subjectId : data.subjects[0]?.id ?? "";
   const subject = data.subjects.find((item) => item.id === effectiveSubjectId) ?? null;
@@ -133,11 +151,11 @@ export function OutlineView() {
     });
     await data.updateNodes(positions);
     setMoving({});
-    setViewport({ x: 16, y: 12, scale: 0.88 });
+    setViewport(INITIAL_VIEWPORT);
   }
 
   function zoom(next: number) {
-    setViewport((current) => ({ ...current, scale: clamp(next, 0.5, 1.5) }));
+    setViewport((current) => ({ ...current, scale: clamp(next, MIN_SCALE, MAX_SCALE) }));
   }
 
   return <div className="space-y-4">
@@ -160,20 +178,21 @@ export function OutlineView() {
       {message && <p className="mt-3 text-sm text-destructive">{message}</p>}
     </section>
 
-    <section className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+    <section className={`overflow-hidden border bg-card shadow-sm ${isFullscreen ? "fixed inset-0 z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground"><Grip className="size-4" />拖曳節點調整脈絡；點一下節點開啟詳細內容。</div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" title="縮小" onClick={() => zoom(viewport.scale - 0.1)}><Minus /></Button>
+          <Button variant="ghost" size="icon" title="縮小" onClick={() => zoom(viewport.scale - 0.15)} disabled={viewport.scale <= MIN_SCALE}><Minus /></Button>
           <span className="w-12 text-center text-xs tabular-nums">{Math.round(viewport.scale * 100)}%</span>
-          <Button variant="ghost" size="icon" title="放大" onClick={() => zoom(viewport.scale + 0.1)}><ZoomIn /></Button>
-          <Button variant="ghost" size="icon" title="回到起點" onClick={() => setViewport({ x: 16, y: 12, scale: 0.88 })}><Focus /></Button>
+          <Button variant="ghost" size="icon" title="放大" onClick={() => zoom(viewport.scale + 0.15)} disabled={viewport.scale >= MAX_SCALE}><ZoomIn /></Button>
+          <Button variant="ghost" size="icon" title="回到起點" onClick={() => setViewport(INITIAL_VIEWPORT)}><Focus /></Button>
+          <Button variant="ghost" size="icon" title={isFullscreen ? "離開全螢幕" : "展開全螢幕"} aria-label={isFullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setIsFullscreen((current) => !current)}>{isFullscreen ? <Minimize2 /> : <Maximize2 />}</Button>
           <Button variant="outline" size="sm" onClick={() => void autoArrange()}><RotateCcw />自動排列</Button>
         </div>
       </div>
-      <div className="relative h-[68vh] min-h-[540px] touch-none overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing" onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)} onWheel={(event) => { if (event.ctrlKey || event.metaKey) { event.preventDefault(); zoom(viewport.scale - event.deltaY * 0.001); } }}>
+      <div className={`relative touch-none overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing ${isFullscreen ? "min-h-0 flex-1" : "h-[68vh] min-h-[540px]"}`} onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)} onWheel={(event) => { if (event.ctrlKey || event.metaKey) { event.preventDefault(); zoom(viewport.scale - event.deltaY * 0.0015); } }}>
         {!subject ? <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">先新增一個科目。</div> : <div className="pointer-events-none absolute left-0 top-0" style={{ width: WORLD_WIDTH, height: WORLD_HEIGHT, transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`, transformOrigin: "0 0" }}>
-          <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full overflow-visible">
+          <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full overflow-visible" viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} shapeRendering="geometricPrecision">
             {nodes.map((node) => {
               const current = positionOf(node);
               const parent = node.parent_id ? nodes.find((item) => item.id === node.parent_id) : null;
@@ -185,7 +204,7 @@ export function OutlineView() {
               const x2 = current.x;
               const y2 = current.y + NODE_HEIGHT / 2;
               const bend = Math.max(45, (x2 - x1) / 2);
-              return <path key={node.id} d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} fill="none" stroke={subject.color} strokeOpacity="0.38" strokeWidth="3" />;
+              return <path key={node.id} d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} fill="none" stroke={subject.color} strokeOpacity="0.38" strokeWidth="3" vectorEffect="non-scaling-stroke" />;
             })}
           </svg>
           <div className="absolute flex items-center gap-3 rounded-2xl border-2 bg-card px-4 py-3 shadow-md" style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }}>
