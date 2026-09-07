@@ -1,4 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="學習地圖書本">
-  <path d="M118 145c42-22 84-22 126 0v231c-42-22-84-22-126 0V145Zm150 0c42-22 84-22 126 0v231c-42-22-84-22-126 0V145Z" fill="none" stroke="#fff" stroke-width="28" stroke-linejoin="round"/>
-  <path d="M256 160v216" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+  <g transform="translate(256 256) scale(.62) translate(-256 -256)">
+    <path d="M118 145c42-22 84-22 126 0v231c-42-22-84-22-126 0V145Zm150 0c42-22 84-22 126 0v231c-42-22-84-22-126 0V145Z" fill="none" stroke="#fff" stroke-width="28" stroke-linejoin="round"/>
+    <path d="M256 160v216" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+  </g>
 </svg>
