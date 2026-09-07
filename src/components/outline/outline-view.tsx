@@ -244,7 +244,7 @@ export function OutlineView() {
 
     <Dialog open={isSubjectDialogOpen} onOpenChange={setIsSubjectDialogOpen}><DialogContent><DialogHeader><DialogTitle>新增科目</DialogTitle><DialogDescription>建立新的科目根節點，之後可以加入內容、節點與錯題。</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="new-subject-name">科目名稱</Label><Input id="new-subject-name" value={subjectName} onChange={(event) => setSubjectName(event.target.value)} placeholder="例如：資訊科技" onKeyDown={(event) => { if (event.key === "Enter") void addSubject(); }} /></div><div className="space-y-2"><Label>科目顏色</Label><ColorPicker value={subjectColor} onChange={setSubjectColor} label="新科目顏色" /></div></div><DialogFooter><Button variant="outline" onClick={() => setIsSubjectDialogOpen(false)}>取消</Button><Button onClick={() => void addSubject()} disabled={!subjectName.trim()}><Plus />建立科目</Button></DialogFooter></DialogContent></Dialog>
 
-    <section className={`overflow-hidden border bg-card shadow-sm ${isFullscreen ? "fixed inset-0 z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
+    <section className={`overflow-hidden border bg-card shadow-sm ${isFullscreen ? "fixed-safe-screen fixed z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground"><Grip className="size-4" /><span className="hidden sm:inline">拖曳節點調整脈絡；滾輪縮放，點一下開啟內容。</span><span className="sm:hidden">點節點閱讀；展開全螢幕後可移動與縮放。</span></div>
         <div className="flex items-center gap-1">

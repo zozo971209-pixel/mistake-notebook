@@ -45,6 +45,11 @@ jobs:
       - name: Initialize Android project
         run: npm run android:init -- --skip-targets-install
 
+      - name: Apply app icon and system safe areas
+        run: |
+          npm run tauri -- icon public/app-icon.svg
+          node scripts/configure-android-window.mjs
+
       - name: Configure release signing
         shell: bash
         env:
@@ -73,6 +78,8 @@ jobs:
           test -n "$apk"
           cp "$apk" release/learning-map-android-arm64.apk
           sha256sum release/learning-map-android-arm64.apk > release/learning-map-android-arm64.apk.sha256
+          (cd release && zip learning-map-android-arm64.zip learning-map-android-arm64.apk learning-map-android-arm64.apk.sha256)
+          sha256sum release/learning-map-android-arm64.zip > release/learning-map-android-arm64.zip.sha256
 
       - uses: actions/upload-artifact@v4
         with:

@@ -27,12 +27,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {navigation}
       <p className="mt-auto border-t px-2 pt-4 text-xs leading-5 text-muted-foreground">資料只保存在這個瀏覽器。</p>
     </aside>
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-card/90 px-4 backdrop-blur lg:hidden">
+    <header className="mobile-app-header sticky z-20 flex h-16 items-center justify-between border-b bg-card/90 px-4 backdrop-blur lg:hidden">
       <Link href="/dashboard" className="font-semibold">學習地圖</Link>
       <Sheet><SheetTrigger asChild><Button variant="ghost" size="icon"><Menu /></Button></SheetTrigger><SheetContent side="left" className="w-72 p-5"><SheetHeader className="mb-6 text-left"><SheetTitle>學習地圖</SheetTitle></SheetHeader><Button asChild className="mb-5 w-full justify-start"><Link href="/questions/new"><Plus />新增錯題</Link></Button>{navigation}</SheetContent></Sheet>
     </header>
-    <main className="lg:pl-64"><div className="mx-auto w-full max-w-7xl p-4 pb-24 sm:p-8 lg:pb-8">{children}</div></main>
-    <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border bg-card/95 p-1.5 shadow-[0_12px_35px_rgb(24_32_51_/_0.14)] backdrop-blur lg:hidden">
+    <main className="lg:pl-64"><div className="mobile-main-content mx-auto w-full max-w-7xl p-4 sm:p-8">{children}</div></main>
+    <nav className="mobile-bottom-nav fixed z-30 grid grid-cols-5 rounded-2xl border bg-card/95 p-1.5 shadow-[0_12px_35px_rgb(24_32_51_/_0.14)] backdrop-blur lg:hidden">
       {nav.slice(0, 2).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] text-muted-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}
       <Link href="/questions/new" aria-label="新增錯題" className="mx-auto flex size-12 -translate-y-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"><Plus className="size-5" /></Link>
       {nav.slice(2).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className={cn("flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl text-[11px] text-muted-foreground", pathname === href && "bg-accent text-foreground")}><Icon className="size-4" />{label}</Link>)}
