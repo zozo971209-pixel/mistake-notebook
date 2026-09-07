@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { friendlyGeminiError, readGeminiCredentials, tutorQuestion } from "@/lib/ai/gemini";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -25,13 +26,17 @@ export function AiTutor({ question }: { question: LocalQuestion }) {
     setError("");
     setMessages((current) => [...current, { role: "user", content: prompt }]);
     setText("");
-    const key = sessionStorage.getItem("mistake_notebook_gemini_key");
-    const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
-    const response = await fetch("/api/ai/tutor", { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { "x-gemini-api-key": key } : {}), ...(model ? { "x-gemini-model": model } : {}) }, body: JSON.stringify({ mode, message: prompt, question: { questionText: question.question_text, correctAnswer: question.correct_answer ?? "", solution: question.solution_text ?? "", originalAnswer: question.original_answer ?? "", errorNote: question.error_note ?? "" } }) });
-    const result = await response.json() as { answer?: string; error?: string };
-    setBusy(false);
-    if (!response.ok || !result.answer) return setError(result.error ?? "AI 回覆失敗");
-    setMessages((current) => [...current, { role: "assistant", content: result.answer! }]);
+    try {
+      const { apiKey, model } = readGeminiCredentials();
+      if (!apiKey) throw new Error("請先到設定頁加入自己的 API Key。");
+      const answer = await tutorQuestion({ apiKey, model: model || undefined, question: question.question_text, correctAnswer: question.correct_answer ?? "", solution: question.solution_text ?? "", originalAnswer: question.original_answer ?? "", errorNote: question.error_note ?? "", mode, userMessage: prompt });
+      setMessages((current) => [...current, { role: "assistant", content: answer }]);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "AI 回覆失敗";
+      setError(message.startsWith("請先") ? message : friendlyGeminiError(cause));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

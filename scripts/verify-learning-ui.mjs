@@ -122,7 +122,7 @@ try {
   await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: 5, y: 5, button: "left", clickCount: 1 });
   await waitFor("!document.querySelector('[data-slot=\"popover-content\"]') || document.querySelector('[data-slot=\"popover-content\"]')?.getAttribute('data-state') === 'closed'", "color picker did not close after outside click");
 
-  await navigate(`http://localhost:3000/outline/subject/${subjectId}`);
+  await navigate(`http://localhost:3000/subject?id=${encodeURIComponent(subjectId)}`);
   await waitFor("Boolean(document.querySelector('.learning-editor'))", "learning editor did not render");
   const uniqueText = `自動儲存驗證-${Date.now()}`;
   await evaluate("document.querySelector('.learning-editor').focus(); true");

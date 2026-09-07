@@ -11,6 +11,7 @@ import type { ExtractedQuestion, QuestionInput } from "@/lib/validations/questio
 import { answerKindLabels, parseAnswerConfig, type AnswerConfig } from "@/lib/questions/answer-config";
 import { AnswerConfigEditor } from "@/components/questions/answer-config-editor";
 import { ImageCropDialog } from "@/components/questions/image-crop-dialog";
+import { extractQuestion, fileToBase64, friendlyGeminiError, readGeminiCredentials } from "@/lib/ai/gemini";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -111,22 +112,15 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
     setScanWarnings([]);
     try {
       const compressed = await imageCompression(selectedFile, { maxSizeMB: 1.5, maxWidthOrHeight: 2200, useWebWorker: true, fileType: "image/webp" });
-      const body = new FormData();
-      body.append("image", compressed, "scan.webp");
-      body.append("subjects", JSON.stringify(subjects.map((subject) => subject.name)));
-      const key = sessionStorage.getItem("mistake_notebook_gemini_key");
-      const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
-      const response = await fetch("/api/ai/extract-question", {
-        method: "POST",
-        body,
-        headers: {
-          ...(key ? { "x-gemini-api-key": key } : {}),
-          ...(model ? { "x-gemini-model": model } : {}),
-        },
+      const { apiKey, model } = readGeminiCredentials();
+      if (!apiKey) throw new Error("請先到設定頁加入自己的 API Key。");
+      const data: ExtractedQuestion = await extractQuestion({
+        apiKey,
+        model: model || undefined,
+        imageBase64: await fileToBase64(compressed),
+        mimeType: compressed.type || "image/webp",
+        subjects: subjects.map((subject) => subject.name),
       });
-      const payload = await response.json() as { data?: ExtractedQuestion; error?: string };
-      if (!response.ok || !payload.data) throw new Error(payload.error ?? "掃描失敗");
-      const data = payload.data;
       const suggestedSubjectId = findSubjectId(subjects, data.subjectSuggestion);
       setFields((current) => ({
         ...current,
@@ -149,7 +143,8 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
       setStep(2);
     } catch (error) {
       setMessageKind("error");
-      setMessage(error instanceof Error ? error.message : "掃描失敗，仍可手動輸入。");
+      const message = error instanceof Error ? error.message : "掃描失敗，仍可手動輸入。";
+      setMessage(message.startsWith("請先") ? message : friendlyGeminiError(error));
     } finally {
       setScanning(false);
     }
@@ -182,7 +177,7 @@ export function QuestionForm({ subjects, initial, defaultSubjectId = "", default
     setMessage("");
     try {
       const id = initial ? (await updateQuestion(initial.id, payload()), initial.id) : await createQuestion(payload());
-      router.push(`/questions/${id}`);
+      router.push(`/question?id=${encodeURIComponent(id)}`);
     } catch (error) {
       setMessageKind("error");
       setMessage(error instanceof Error ? error.message : "無法儲存題目。");

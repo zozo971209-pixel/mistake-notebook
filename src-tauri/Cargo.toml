@@ -1,0 +1,25 @@
+[package]
+name = "mistake-notebook"
+version = "0.1.0"
+description = "Local-first learning map and mistake notebook"
+authors = ["zozo971209-pixel"]
+license = "UNLICENSED"
+repository = "https://github.com/zozo971209-pixel/mistake-notebook"
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "mistake_notebook_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3" }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3" }
+tauri-plugin-log = "2"

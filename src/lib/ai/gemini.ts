@@ -1,4 +1,3 @@
-import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import { extractedQuestionSchema } from "@/lib/validations/question";
 
@@ -171,4 +170,24 @@ export function friendlyGeminiError(error: unknown) {
   if (/billing|FAILED_PRECONDITION/i.test(message)) return "此模型或地區需要啟用 Billing，請改用有免費層的模型或到 AI Studio 檢查方案。";
   if (/404|not found/i.test(message)) return "目前帳號無法使用所選模型，請到 AI Studio 查看可用模型。";
   return "AI 服務暫時無法完成請求，請稍後再試；你仍可手動建立與複習錯題。";
+}
+
+export function readGeminiCredentials() {
+  if (typeof window === "undefined") return { apiKey: "", model: "" };
+  return {
+    apiKey: sessionStorage.getItem("mistake_notebook_gemini_key")?.trim() ?? "",
+    model: localStorage.getItem("mistake_notebook_gemini_model")?.trim() ?? "",
+  };
+}
+
+export async function fileToBase64(file: File) {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("無法讀取圖片。"));
+    reader.readAsDataURL(file);
+  });
+  const separator = dataUrl.indexOf(",");
+  if (separator < 0) throw new Error("圖片格式無法辨識。");
+  return dataUrl.slice(separator + 1);
 }

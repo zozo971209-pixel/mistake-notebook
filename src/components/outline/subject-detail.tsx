@@ -59,7 +59,7 @@ function SubjectEditor({ subject }: { subject: LocalSubject }) {
   async function addNode() {
     if (!nodeName.trim()) return;
     const id = await data.createNode(subject.id, nodeName, null, nodeColor);
-    router.push(`/outline/${id}`);
+    router.push(`/node?id=${encodeURIComponent(id)}`);
   }
 
   return <div className="space-y-5">
@@ -83,7 +83,7 @@ function SubjectEditor({ subject }: { subject: LocalSubject }) {
 
       {sidebarOpen && <aside className="space-y-5 xl:sticky xl:top-8 xl:self-start">
         <Card><CardHeader><CardTitle>科目架構</CardTitle><CardDescription>{topLevelNodes.length} 個第一層節點，{linkedQuestions.length} 道錯題。</CardDescription></CardHeader><CardContent className="space-y-3">
-          {topLevelNodes.slice(0, 8).map((node) => <Link key={node.id} href={`/outline/${node.id}`} className="block rounded-xl border p-3 text-sm font-medium transition hover:border-primary/40">{node.name}</Link>)}
+          {topLevelNodes.slice(0, 8).map((node) => <Link key={node.id} href={`/node?id=${encodeURIComponent(node.id)}`} className="block rounded-xl border p-3 text-sm font-medium transition hover:border-primary/40">{node.name}</Link>)}
           {!topLevelNodes.length && <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">尚未建立第一層節點。</p>}
           <Button asChild className="w-full"><Link href={`/questions/new?subject=${subject.id}`}><FileQuestion />新增錯題到此科目</Link></Button>
         </CardContent></Card>

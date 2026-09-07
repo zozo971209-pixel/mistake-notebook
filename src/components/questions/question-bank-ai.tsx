@@ -6,6 +6,7 @@ import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalQuestion, LocalSubject } from "@/lib/local-data/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { classifyQuestions, friendlyGeminiError, readGeminiCredentials } from "@/lib/ai/gemini";
 
 export function QuestionBankAI({ questions, subjects }: { questions: LocalQuestion[]; subjects: LocalSubject[] }) {
   const { assignQuestions } = useLocalData();
@@ -20,13 +21,19 @@ export function QuestionBankAI({ questions, subjects }: { questions: LocalQuesti
     if (!selected.length) return setMessage("請先勾選要整理的題目。");
     setBusy(true); setMessage("");
     try {
-      const key = sessionStorage.getItem("mistake_notebook_gemini_key");
-      const model = localStorage.getItem("mistake_notebook_gemini_model") ?? "";
-      const response = await fetch("/api/ai/classify-questions", { method: "POST", headers: { "Content-Type": "application/json", ...(key ? { "x-gemini-api-key": key } : {}), ...(model ? { "x-gemini-model": model } : {}) }, body: JSON.stringify({ subjects: subjects.map((s) => s.name), questions: candidates.filter((q) => selected.includes(q.id)).map((q) => ({ id: q.id, title: q.title ?? "", questionText: q.question_text })) }) });
-      const payload = await response.json() as { assignments?: typeof preview; error?: string };
-      if (!response.ok) throw new Error(payload.error ?? "AI 歸類失敗");
-      setPreview(payload.assignments ?? []);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "AI 歸類失敗"); }
+      const { apiKey, model } = readGeminiCredentials();
+      if (!apiKey) throw new Error("請先到設定頁加入自己的 API Key。");
+      const assignments = await classifyQuestions({
+        apiKey,
+        model: model || undefined,
+        subjects: subjects.map((subject) => subject.name),
+        questions: candidates.filter((question) => selected.includes(question.id)).map((question) => ({ id: question.id, title: question.title ?? "", questionText: question.question_text })),
+      });
+      setPreview(assignments);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI 歸類失敗";
+      setMessage(message.startsWith("請先") ? message : friendlyGeminiError(error));
+    }
     finally { setBusy(false); }
   }
 

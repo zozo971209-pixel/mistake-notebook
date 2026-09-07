@@ -112,7 +112,7 @@ export function OutlineView() {
       setNodeName("");
       setParentId("root");
       setMessage("");
-      router.push(`/outline/${id}`);
+      router.push(`/node?id=${encodeURIComponent(id)}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "無法新增節點。");
     }
@@ -273,11 +273,11 @@ export function OutlineView() {
               return <path key={node.id} d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`} fill="none" stroke={node.color ?? subject.color} strokeOpacity="0.38" strokeWidth="3" vectorEffect="non-scaling-stroke" />;
             })}
           </svg>
-          <button type="button" onClick={() => router.push(`/outline/subject/${subject.id}`)} className="pointer-events-auto absolute flex items-center gap-3 rounded-2xl border-2 bg-card px-4 py-3 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary" style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }} aria-label={`開啟${subject.name}科目內容`}>
+          <button type="button" onClick={() => router.push(`/subject?id=${encodeURIComponent(subject.id)}`)} className="pointer-events-auto absolute flex items-center gap-3 rounded-2xl border-2 bg-card px-4 py-3 text-left shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary" style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }} aria-label={`開啟${subject.name}科目內容`}>
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ backgroundColor: subject.color }}><MapIcon className="size-5" /></span>
             <div className="min-w-0"><strong className="block truncate">{subject.name}</strong><small className="text-muted-foreground">{nodes.length} 節點 · {subjectQuestionCount} 題</small></div>
           </button>
-          {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; const color = node.color ?? subject.color; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} onClick={() => { if (suppressNodeClickRef.current) { suppressNodeClickRef.current = false; return; } router.push(`/outline/${node.id}`); }} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
+          {nodes.map((node) => { const position = positionOf(node); const count = questionCounts.get(node.id) ?? 0; const color = node.color ?? subject.color; return <button key={node.id} type="button" onPointerDown={(event) => beginNodeDrag(event, node)} onClick={() => { if (suppressNodeClickRef.current) { suppressNodeClickRef.current = false; return; } router.push(`/node?id=${encodeURIComponent(node.id)}`); }} className="pointer-events-auto group absolute select-none rounded-2xl border bg-card p-4 text-left shadow-[0_8px_24px_rgb(24_32_51_/_0.10)] transition-shadow hover:shadow-[0_12px_30px_rgb(24_32_51_/_0.16)] focus-visible:ring-2 focus-visible:ring-primary" style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
             <span className="line-clamp-2 pr-6 text-sm font-semibold leading-5">{node.name}</span>
             <span className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><FileQuestion className="size-3.5" />{count} 道錯題</span>
             <Grip className="absolute right-3 top-3 size-4 text-muted-foreground/45 group-hover:text-muted-foreground" />

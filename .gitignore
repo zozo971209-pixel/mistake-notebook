@@ -36,6 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Android signing and generated native project
+/src-tauri/gen/
+*.jks
+*.keystore
+*.p12
+keystore.properties
+/.private/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

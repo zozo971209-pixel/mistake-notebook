@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, ExternalLink, KeyRound, Loader2, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { InstallAppCard } from "@/components/settings/install-app-card";
+import { friendlyGeminiError, testGeminiKey } from "@/lib/ai/gemini";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LearningMapBackup } from "@/lib/local-data/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -42,17 +43,15 @@ export function ByokSettings({ section = "all" }: { section?: "all" | "key" | "d
     setMessage("");
     setSuccess(false);
     try {
-      const response = await fetch("/api/ai/test-key", { method: "POST", headers: { "x-gemini-api-key": key.trim() } });
-      const result = await response.json() as { ok?: boolean; model?: string; error?: string };
-      if (!response.ok || !result.ok || !result.model) throw new Error(result.error ?? "測試失敗");
+      const model = await testGeminiKey(key.trim());
       sessionStorage.setItem(SESSION_KEY, key.trim());
       if (remember) localStorage.setItem(LOCAL_KEY, key.trim()); else localStorage.removeItem(LOCAL_KEY);
-      localStorage.setItem(MODEL_KEY, result.model);
-      await data.updateSettings({ preferred_model: result.model });
+      localStorage.setItem(MODEL_KEY, model);
+      await data.updateSettings({ preferred_model: model });
       setSuccess(true);
-      setMessage(`連線成功，目前使用 ${result.model}。Key 只保存在這個瀏覽器。`);
+      setMessage(`連線成功，目前使用 ${model}。Key 只保存在這個裝置。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "測試失敗");
+      setMessage(friendlyGeminiError(error));
     } finally {
       setBusy(false);
     }
@@ -65,7 +64,7 @@ export function ByokSettings({ section = "all" }: { section?: "all" | "key" | "d
     setKey("");
     setRemember(false);
     setSuccess(true);
-    setMessage("已從這個瀏覽器刪除 API Key。");
+    setMessage("已從這個裝置刪除 API Key。");
   }
 
   function downloadBackup(backup = data.exportBackup(), prefix = "learning-map") {

@@ -73,7 +73,7 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
   async function addChild() {
     if (!childName.trim()) return;
     const id = await data.createNode(node.subject_id, childName, node.id, childColor);
-    router.push(`/outline/${id}`);
+    router.push(`/node?id=${encodeURIComponent(id)}`);
   }
 
   return <div className="space-y-5">
@@ -97,7 +97,7 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
 
       {sidebarOpen && <aside className="space-y-5 xl:sticky xl:top-8 xl:self-start">
         <Card><CardHeader><CardTitle>連結的錯題</CardTitle><CardDescription>{linkedQuestions.length} 道題目位於此節點。</CardDescription></CardHeader><CardContent className="space-y-3">
-          {linkedQuestions.map((question) => <Link key={question.id} href={`/questions/${question.id}`} className="block rounded-xl border p-3 transition hover:border-primary/40"><span className="line-clamp-2 text-sm font-medium">{question.title || question.question_text}</span><span className="mt-1 block text-xs text-muted-foreground">熟練度 {question.mastery_score}%</span></Link>)}
+          {linkedQuestions.map((question) => <Link key={question.id} href={`/question?id=${encodeURIComponent(question.id)}`} className="block rounded-xl border p-3 transition hover:border-primary/40"><span className="line-clamp-2 text-sm font-medium">{question.title || question.question_text}</span><span className="mt-1 block text-xs text-muted-foreground">熟練度 {question.mastery_score}%</span></Link>)}
           {!linkedQuestions.length && <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">還沒有錯題連到這裡。</p>}
           <Button asChild className="w-full"><Link href={`/questions/new?subject=${node.subject_id}&chapter=${encodeURIComponent(node.name)}`}><FileQuestion />新增錯題到此節點</Link></Button>
         </CardContent></Card>
