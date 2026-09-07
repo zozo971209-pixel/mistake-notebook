@@ -47,7 +47,7 @@ jobs:
 
       - name: Apply app icon and system safe areas
         run: |
-          npm run tauri -- icon public/app-icon.svg
+          npm run tauri -- icon public/tauri-icon.json
           node scripts/configure-android-window.mjs
 
       - name: Configure release signing
