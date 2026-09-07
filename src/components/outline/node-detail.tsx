@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, FileQuestion, ImageIcon, Link2, PanelRightClose, PanelRightOpen, Plus, Save, Trash2, Video } from "lucide-react";
+import { ArrowLeft, BookOpen, ExternalLink, FileQuestion, ImageIcon, Link2, Pencil, Plus, Save, Trash2, Video } from "lucide-react";
 import { ColorPicker } from "@/components/outline/color-picker";
 import { LearningEditor } from "@/components/outline/learning-editor";
 import { SearchableParentSelect } from "@/components/outline/searchable-parent-select";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { LocalNodeResource, LocalOutlineNode, LocalSubject } from "@/lib/local-data/types";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,7 +39,8 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
   const [resourceUrl, setResourceUrl] = useState("");
   const [childName, setChildName] = useState("");
   const [childColor, setChildColor] = useState(node.color ?? subject.color);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [readingMode, setReadingMode] = useState(false);
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLDivElement | null>(null);
   const [message, setMessage] = useState("");
 
   const blockedParentIds = useMemo(() => {
@@ -58,7 +58,7 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
   async function save() {
     if (!name.trim()) return setMessage("節點名稱不能空白。");
     await data.updateNode(node.id, { name: name.trim(), color, parent_id: parentId === "root" ? null : parentId, resources });
-    setMessage("節點設定已儲存於這個瀏覽器；白紙內容會自動儲存。");
+    setMessage("節點設定已儲存於這個裝置。");
   }
 
   function addResource() {
@@ -76,26 +76,30 @@ function NodeEditor({ node, subject }: { node: LocalOutlineNode; subject: LocalS
     router.push(`/node?id=${encodeURIComponent(id)}`);
   }
 
-  return <div className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3">
+  return <div className={readingMode ? "fixed-safe-screen fixed z-[60] overflow-y-auto bg-white" : "space-y-5"}>
+    {!readingMode && <div className="flex flex-wrap items-center justify-between gap-3">
       <Button asChild variant="ghost" className="-ml-3"><Link href="/outline"><ArrowLeft />回到學習地圖</Link></Button>
-      <div className="flex gap-2"><Button variant="outline" onClick={() => setSidebarOpen((open) => !open)}>{sidebarOpen ? <PanelRightClose /> : <PanelRightOpen />}{sidebarOpen ? "專注閱讀" : "顯示側欄"}</Button><Button onClick={() => void save()}><Save />儲存設定</Button></div>
-    </div>
-    {message && <p className="rounded-xl bg-secondary px-4 py-3 text-sm text-secondary-foreground">{message}</p>}
+      <div className="flex gap-2"><Button variant="outline" onClick={() => setReadingMode(true)}><BookOpen />閱讀</Button><Button onClick={() => void save()}><Save />儲存設定</Button></div>
+    </div>}
+    {readingMode && <Button className="absolute right-4 top-4 z-10 shadow-lg" variant="secondary" onClick={() => setReadingMode(false)}><Pencil />編輯</Button>}
+    {!readingMode && message && <p className="rounded-xl bg-secondary px-4 py-3 text-sm text-secondary-foreground">{message}</p>}
 
-    <div className={`grid gap-5 ${sidebarOpen ? "xl:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}>
-      <Card className="overflow-hidden bg-muted/25 py-0">
+    <div className={`grid ${readingMode ? "grid-cols-1" : "gap-5 xl:grid-cols-[minmax(0,1fr)_360px]"}`}>
+      <Card className={`overflow-hidden py-0 ${readingMode ? "border-0 bg-white shadow-none" : "bg-muted/25"}`}>
         <LearningEditor
           documentId={`node-${node.id}`}
           initialContent={node.content}
           placeholder="輸入概念、公式、例題、容易混淆之處…"
+          editable={!readingMode}
+          toolbarTarget={toolbarTarget}
           onSave={(content) => data.updateNode(node.id, { content })}
-          header={<div className="mb-8 border-b pb-5" style={{ borderColor: color }}><Badge variant="outline" style={{ borderColor: subject.color, color: subject.color }}>{subject.name}</Badge><h1 className="mt-3 text-3xl font-semibold tracking-tight">{name || "未命名節點"}</h1><p className="mt-2 text-sm text-slate-500">內容會自動儲存；選取文字可加入個人注釋。</p></div>}
           footer={resources.length > 0 ? <section className="mt-10 border-t pt-7"><h2 className="mb-4 text-lg font-semibold">延伸資料</h2><div className="grid gap-4 md:grid-cols-2">{resources.map((resource) => <ResourceCard key={resource.id} resource={resource} />)}</div></section> : undefined}
         />
       </Card>
 
-      {sidebarOpen && <aside className="space-y-5 xl:sticky xl:top-8 xl:self-start">
+      {!readingMode && <aside className="space-y-5 xl:sticky xl:top-8 xl:self-start">
+        <Card><CardHeader><CardTitle>編輯工具</CardTitle><CardDescription>調整文字、插入學習區塊、搜尋或管理注釋。</CardDescription></CardHeader><CardContent><div ref={setToolbarTarget} /></CardContent></Card>
+
         <Card><CardHeader><CardTitle>連結的錯題</CardTitle><CardDescription>{linkedQuestions.length} 道題目位於此節點。</CardDescription></CardHeader><CardContent className="space-y-3">
           {linkedQuestions.map((question) => <Link key={question.id} href={`/question?id=${encodeURIComponent(question.id)}`} className="block rounded-xl border p-3 transition hover:border-primary/40"><span className="line-clamp-2 text-sm font-medium">{question.title || question.question_text}</span><span className="mt-1 block text-xs text-muted-foreground">熟練度 {question.mastery_score}%</span></Link>)}
           {!linkedQuestions.length && <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">還沒有錯題連到這裡。</p>}

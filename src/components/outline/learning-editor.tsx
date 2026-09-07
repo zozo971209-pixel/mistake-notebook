@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   $createParagraphNode,
   $createTextNode,
@@ -53,7 +54,6 @@ import {
   ListOrdered,
   LoaderCircle,
   MessageSquarePlus,
-  Pencil,
   Quote,
   Redo2,
   Search,
@@ -64,7 +64,6 @@ import {
   TriangleAlert,
   Underline,
   Undo2,
-  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -124,15 +123,17 @@ export function LearningEditor({
   documentId,
   initialContent,
   placeholder,
-  header,
   footer,
+  editable,
+  toolbarTarget,
   onSave,
 }: {
   documentId: string;
   initialContent: string;
   placeholder: string;
-  header: React.ReactNode;
   footer?: React.ReactNode;
+  editable: boolean;
+  toolbarTarget: HTMLDivElement | null;
   onSave: (content: string) => Promise<void>;
 }) {
   const parsed = useMemo(() => parseLearningDocument(initialContent), [initialContent]);
@@ -155,22 +156,22 @@ export function LearningEditor({
   }), [documentId, parsed.editorState, parsed.legacyHtml]);
 
   return <LexicalComposer initialConfig={initialConfig}>
-    <LearningEditorBody initialAnnotations={parsed.annotations} placeholder={placeholder} header={header} footer={footer} onSave={onSave} />
+    <LearningEditorBody initialAnnotations={parsed.annotations} placeholder={placeholder} footer={footer} editable={editable} toolbarTarget={toolbarTarget} onSave={onSave} />
   </LexicalComposer>;
 }
 
-function LearningEditorBody({ initialAnnotations, placeholder, header, footer, onSave }: {
+function LearningEditorBody({ initialAnnotations, placeholder, footer, editable, toolbarTarget, onSave }: {
   initialAnnotations: LearningAnnotation[];
   placeholder: string;
-  header: React.ReactNode;
   footer?: React.ReactNode;
+  editable: boolean;
+  toolbarTarget: HTMLDivElement | null;
   onSave: (content: string) => Promise<void>;
 }) {
   const [editor] = useLexicalComposerContext();
   const [annotations, setAnnotations] = useState(initialAnnotations);
   const annotationsRef = useRef(initialAnnotations);
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
-  const [editable, setEditable] = useState(true);
   const [headings, setHeadings] = useState<DocumentHeading[]>([]);
   const [annotationDialogOpen, setAnnotationDialogOpen] = useState(false);
   const [annotationText, setAnnotationText] = useState("");
@@ -284,25 +285,22 @@ function LearningEditorBody({ initialAnnotations, placeholder, header, footer, o
     updateAnnotations(annotationsRef.current.filter((annotation) => annotation.id !== id));
   }
 
-  return <div className="overflow-hidden bg-muted/25">
-    <EditorToolbar
+  return <div className={cn("overflow-hidden", editable ? "bg-muted/25" : "bg-white")}>
+    {toolbarTarget && editable && createPortal(<EditorToolbar
       saveState={saveState}
       savedAt={savedAt}
       annotationCount={annotations.length}
       annotationsOpen={annotationsOpen}
-      editable={editable}
       onToggleAnnotations={() => setAnnotationsOpen((open) => !open)}
-      onToggleEditable={() => setEditable((current) => !current)}
       onAnnotate={beginAnnotation}
       onSaveNow={() => {
         if (timerRef.current) clearTimeout(timerRef.current);
         void persist();
       }}
-    />
+    />, toolbarTarget)}
     <div className="flex items-stretch">
       <div className="min-w-0 flex-1 p-3 sm:p-8">
-        <article className="mx-auto min-h-[72vh] max-w-[880px] bg-white px-6 py-8 text-slate-900 shadow-[0_10px_35px_rgb(31_41_55_/_0.10)] sm:px-12 sm:py-12">
-          {header}
+        <article className={cn("mx-auto min-h-[72vh] max-w-[880px] bg-white px-6 py-8 text-slate-900 sm:px-12 sm:py-12", editable && "shadow-[0_10px_35px_rgb(31_41_55_/_0.10)]")}>
           <div className="relative">
             <RichTextPlugin
               contentEditable={<ContentEditable className={cn("learning-editor min-h-[420px] outline-none", !editable && "cursor-default")} aria-label="學習文件內容" />}
@@ -313,7 +311,7 @@ function LearningEditorBody({ initialAnnotations, placeholder, header, footer, o
           {footer}
         </article>
       </div>
-      {annotationsOpen && <AnnotationPanel annotations={annotations} headings={headings} onHeadingClick={(key) => editor.getElementByKey(key)?.scrollIntoView({ behavior: "smooth", block: "center" })} onDelete={deleteAnnotation} />}
+      {editable && annotationsOpen && <AnnotationPanel annotations={annotations} headings={headings} onHeadingClick={(key) => editor.getElementByKey(key)?.scrollIntoView({ behavior: "smooth", block: "center" })} onDelete={deleteAnnotation} />}
     </div>
     <HistoryPlugin />
     <ListPlugin />
@@ -335,14 +333,12 @@ function LearningEditorBody({ initialAnnotations, placeholder, header, footer, o
   </div>;
 }
 
-function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, editable, onToggleAnnotations, onToggleEditable, onAnnotate, onSaveNow }: {
+function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, onToggleAnnotations, onAnnotate, onSaveNow }: {
   saveState: SaveState;
   savedAt: Date | null;
   annotationCount: number;
   annotationsOpen: boolean;
-  editable: boolean;
   onToggleAnnotations: () => void;
-  onToggleEditable: () => void;
   onAnnotate: () => void;
   onSaveNow: () => void;
 }) {
@@ -451,11 +447,9 @@ function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, e
         : { icon: Check, text: savedAt ? `${savedAt.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })} 已儲存` : "已自動儲存", className: "" };
   const StatusIcon = status.icon;
 
-  return <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-card/95 px-3 py-2 backdrop-blur sm:px-4">
+  return <div className="flex flex-col gap-3">
     <div className="flex flex-wrap items-center gap-1">
-      <Button type="button" variant={editable ? "secondary" : "default"} size="sm" onClick={onToggleEditable}>{editable ? <Pencil /> : <BookOpen />}{editable ? "編輯" : "閱讀"}</Button>
       <Popover><PopoverTrigger asChild><Button type="button" variant="ghost" size="icon" aria-label="搜尋文件" title="搜尋文件"><Search /></Button></PopoverTrigger><PopoverContent align="start" className="w-72"><p className="mb-2 text-sm font-medium">搜尋文件</p><div className="flex gap-2"><Input value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setSearchMessage(""); }} onKeyDown={(event) => { if (event.key === "Enter") findNext(); }} placeholder="輸入關鍵字" /><Button type="button" size="sm" onClick={findNext}>下一筆</Button></div>{searchMessage && <p className="mt-2 text-xs text-muted-foreground">{searchMessage}</p>}</PopoverContent></Popover>
-      {editable && <>
       <ToolButton label="復原" disabled={!canUndo} onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}><Undo2 /></ToolButton>
       <ToolButton label="重做" disabled={!canRedo} onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}><Redo2 /></ToolButton>
       <span className="mx-1 h-6 w-px bg-border" />
@@ -472,9 +466,8 @@ function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, e
       <ToolButton label="3 × 3 表格" onClick={() => editor.dispatchCommand(INSERT_TABLE_COMMAND, { columns: "3", rows: "3", includeHeaders: true })}><Table2 /></ToolButton>
       <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="sm"><BookOpenCheck />學習區塊</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuLabel>插入學習範本</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuItem onClick={() => insertStudyBlock("concept")}><BookOpenCheck />核心概念</DropdownMenuItem><DropdownMenuItem onClick={() => insertStudyBlock("mistake")}><TriangleAlert />常見錯誤</DropdownMenuItem><DropdownMenuItem onClick={() => insertStudyBlock("question")}><CircleHelp />自我提問</DropdownMenuItem><DropdownMenuItem onClick={() => insertStudyBlock("formula")}><Sigma />公式與條件</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
       <Button type="button" variant="outline" size="sm" onClick={onAnnotate}><MessageSquarePlus />注釋</Button>
-      </>}
     </div>
-    <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between gap-2 border-t pt-3">
       <button type="button" className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs", saveState === "error" ? "text-destructive" : "text-muted-foreground")} onClick={onSaveNow} title="立即儲存"><StatusIcon className={cn("size-3.5", status.className)} />{status.text}</button>
       <Button type="button" variant={annotationsOpen ? "secondary" : "ghost"} size="sm" onClick={onToggleAnnotations}><MessageSquarePlus />{annotationCount}</Button>
     </div>
