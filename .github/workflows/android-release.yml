@@ -32,6 +32,8 @@ jobs:
           targets: aarch64-linux-android
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android SDK and NDK
         shell: bash
