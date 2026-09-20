@@ -312,6 +312,8 @@ export function OutlineView() {
   function beginNodeDrag(event: React.PointerEvent, node: LocalOutlineNode) {
     if (event.pointerType === "touch" && !isFullscreen) return;
     event.stopPropagation();
+    setSelectedNodeId(node.id);
+    if (diagram) window.localStorage.setItem(`${LAST_NODE_STORAGE_PREFIX}${diagram.id}`, node.id);
     event.currentTarget.setPointerCapture(event.pointerId);
     const branchRootIds = [node.id];
     const nodeIds = collectBranchNodeIds(branchRootIds, nodes);
@@ -577,7 +579,8 @@ export function OutlineView() {
               if (suppressNodeClickRef.current) { suppressNodeClickRef.current = false; return; }
               if (mindMapRecallMode && !revealedNodeIds.has(node.id)) { setRevealedNodeIds((current) => new Set(current).add(node.id)); return; }
               openMindMapNode(node.id);
-            }} aria-pressed={isSelected} className={`pointer-events-auto group absolute flex select-none items-center rounded-xl border bg-card px-1.5 py-1 text-left shadow-[0_7px_20px_rgb(24_32_51_/_0.09)] transition-[box-shadow,transform,background-color,border-color] hover:shadow-[0_11px_26px_rgb(24_32_51_/_0.15)] focus-visible:ring-2 focus-visible:ring-primary ${isSelected ? "border-blue-500 bg-blue-50 ring-4 ring-blue-500/30" : ""} ${isDropTarget ? "scale-[1.03] ring-4 ring-primary/35" : ""}`} style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
+            }} aria-pressed={isSelected} className={`pointer-events-auto group absolute flex select-none items-center rounded-xl border bg-card px-1.5 py-1 text-left shadow-[0_7px_20px_rgb(24_32_51_/_0.09)] transition-[box-shadow,transform,background-color,border-color] hover:shadow-[0_11px_26px_rgb(24_32_51_/_0.15)] focus-visible:ring-2 focus-visible:ring-primary ${isSelected ? "z-10 bg-blue-50 shadow-[0_0_0_5px_rgb(37_99_235_/_0.35),0_11px_26px_rgb(24_32_51_/_0.16)]" : ""} ${isDropTarget ? "scale-[1.03] ring-4 ring-primary/35" : ""}`} style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
+              {isSelected && <span aria-hidden="true" className="pointer-events-none absolute -inset-1 rounded-[0.95rem] border-[3px] border-blue-600" />}
               <span className="line-clamp-2 w-full pr-5 text-2xl font-bold leading-7">{mindMapRecallMode && !revealedNodeIds.has(node.id) ? "？" : node.name}</span>
               <Grip className="absolute right-1.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/35 group-hover:text-muted-foreground" />
             </button>;

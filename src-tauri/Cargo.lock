@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "mistake-notebook"
-version = "0.1.36"
+version = "0.1.37"
 dependencies = [
  "log",
  "serde",

@@ -234,16 +234,6 @@
   overflow-wrap: anywhere;
 }
 
-.learning-editor > * {
-  transition: opacity 120ms ease, max-height 160ms ease;
-}
-
-.learning-block-collapsed {
-  max-height: 2.6rem !important;
-  opacity: 0.58;
-  overflow: hidden !important;
-}
-
 .learning-decorator-node {
   position: relative;
 }

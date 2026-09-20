@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
-  $copyNode,
   $createParagraphNode,
   $createRangeSelection,
   $createTextNode,
@@ -16,15 +15,18 @@ import {
   $isTextNode,
   $getNearestNodeFromDOMNode,
   $isRangeSelection,
+  $insertNodes,
   $nodesOfType,
   $setSelection,
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_CRITICAL,
+  COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   FORMAT_TEXT_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
+  PASTE_COMMAND,
   SELECTION_CHANGE_COMMAND,
   type BaseSelection,
   type EditorState,
@@ -42,7 +44,7 @@ import { INSERT_CHECK_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERE
 import { $isMarkNode, $unwrapMarkNode, $wrapSelectionInMarkNode, MarkNode } from "@lexical/mark";
 import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from "@lexical/selection";
 import { $createHeadingNode, $createQuoteNode, $isHeadingNode, $isQuoteNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
-import { $isTableCellNode, $isTableNode, $isTableSelection, INSERT_TABLE_COMMAND, TableCellNode, TableNode, TableRowNode } from "@lexical/table";
+import { $deleteTableColumnAtSelection, $deleteTableRowAtSelection, $insertTableColumnAtSelection, $insertTableRowAtSelection, $isTableCellNode, $isTableNode, $isTableSelection, INSERT_TABLE_COMMAND, TableCellNode, TableNode, TableRowNode } from "@lexical/table";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -62,11 +64,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
-  ChevronDown,
-  ChevronUp,
   CircleAlert,
-  Copy,
-  GripVertical,
   Image as ImageIcon,
   Italic,
   Link2,
@@ -167,6 +165,7 @@ const FONT_FAMILIES = [
   { label: "等寬字體", value: '"Cascadia Mono", Consolas, monospace' },
 ] as const;
 const FONT_SIZES = ["14px", "16px", "18px", "20px", "24px", "32px"] as const;
+const lastTableCellKey = new WeakMap<LexicalEditor, string>();
 
 const INSERT_ITEMS: InsertItem[] = [
   { id: "callout", label: "提示內容", description: "整理重點、提醒或補充", icon: Quote },
@@ -781,10 +780,10 @@ function LearningEditorBody({ initialAnnotations, placeholder, footer, editable,
     <CheckListPlugin />
     <LinkPlugin />
     <UnsafeLinkSanitizerPlugin />
+    {editable && <SanitizedPastePlugin />}
     <TablePlugin hasHorizontalScroll hasCellBackgroundColor />
     {editable && <TableInteractionPlugin />}
     <HorizontalRulePlugin />
-    {editable && <BlockControls />}
     <OnChangePlugin ignoreSelectionChange onChange={onEditorChange} />
 
     <Dialog open={annotationDialogOpen} onOpenChange={(open) => { setAnnotationDialogOpen(open); if (!open) { setAnnotationError(""); setEditingAnnotationTarget(null); } }}>
@@ -851,6 +850,7 @@ function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, o
   const searchCursorRef = useRef({ query: "", index: -1 });
   const searchHighlightRef = useRef<HTMLElement | null>(null);
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
+  const [tableColorOpen, setTableColorOpen] = useState(false);
   const [tableSize, setTableSize] = useState({ rows: 3, columns: 3 });
   const [insertOpen, setInsertOpen] = useState(false);
   const [insertQuery, setInsertQuery] = useState("");
@@ -1023,16 +1023,66 @@ function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, o
   function deleteCurrentTable() {
     editor.update(() => {
       let selection = $getSelection();
-      if (!$isRangeSelection(selection) && !$isTableSelection(selection) && formatSelectionRef.current) {
+      if (formatSelectionRef.current) {
         selection = formatSelectionRef.current.clone();
         $setSelection(selection);
       }
-      const table = findTableNodeFromSelection(selection);
+      let table = findTableNodeFromSelection(selection);
+      if (!table) {
+        const cell = $getNodeByKey(lastTableCellKey.get(editor) ?? "");
+        table = $isTableCellNode(cell) ? findTableNode(cell) : null;
+      }
       if (!table) return;
       const paragraph = $createParagraphNode();
       table.insertAfter(paragraph);
       table.remove();
       paragraph.selectStart();
+    });
+  }
+
+  function updateCurrentTable(action: () => void) {
+    editor.update(() => {
+      let selection = $getSelection();
+      if (formatSelectionRef.current) {
+        selection = formatSelectionRef.current.clone();
+        $setSelection(selection);
+      }
+      if (!findTableNodeFromSelection(selection)) {
+        const cell = $getNodeByKey(lastTableCellKey.get(editor) ?? "");
+        if ($isTableCellNode(cell)) {
+          cell.selectStart();
+          selection = $getSelection();
+        }
+      }
+      if (($isRangeSelection(selection) || $isTableSelection(selection)) && findTableNodeFromSelection(selection)) action();
+    });
+  }
+
+  function applyTableCellBackground(color: string | null) {
+    editor.update(() => {
+      let selection = $getSelection();
+      if (formatSelectionRef.current) {
+        selection = formatSelectionRef.current.clone();
+        $setSelection(selection);
+      }
+      if (!$isRangeSelection(selection) && !$isTableSelection(selection)) {
+        const cell = $getNodeByKey(lastTableCellKey.get(editor) ?? "");
+        if ($isTableCellNode(cell)) cell.setBackgroundColor(color);
+        return;
+      }
+      const cells = new Map<string, TableCellNode>();
+      const selectedNodes = $isRangeSelection(selection)
+        ? [selection.anchor.getNode(), selection.focus.getNode(), ...selection.getNodes()]
+        : selection.getNodes();
+      for (const node of selectedNodes) {
+        const cell = findTableCellNode(node);
+        if (cell) cells.set(cell.getKey(), cell);
+      }
+      if (!cells.size) {
+        const cell = $getNodeByKey(lastTableCellKey.get(editor) ?? "");
+        if ($isTableCellNode(cell)) cells.set(cell.getKey(), cell);
+      }
+      for (const cell of cells.values()) cell.setBackgroundColor(color);
     });
   }
 
@@ -1162,6 +1212,29 @@ function EditorToolbar({ saveState, savedAt, annotationCount, annotationsOpen, o
       <Button type="button" variant="outline" size="sm" onClick={onLink}><Link2 />連接</Button>
       <Button type="button" variant="outline" size="sm" onClick={onAnnotate}><MessageSquarePlus />注釋</Button>
       <Button type="button" variant="outline" size="sm" onPointerDown={rememberInsertSelection} onClick={() => setInsertOpen(true)}><Plus />插入</Button>
+      {formatState.inTable && <DropdownMenu>
+        <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="sm" onPointerDown={rememberFormatSelection}><Table2 />表格</Button></DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-52">
+          <DropdownMenuItem onClick={() => updateCurrentTable(() => $insertTableRowAtSelection(false))}>在上方新增一列</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => updateCurrentTable(() => $insertTableRowAtSelection(true))}>在下方新增一列</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => updateCurrentTable(() => $insertTableColumnAtSelection(false))}>在左側新增一欄</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => updateCurrentTable(() => $insertTableColumnAtSelection(true))}>在右側新增一欄</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => updateCurrentTable($deleteTableRowAtSelection)}>刪除目前列</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => updateCurrentTable($deleteTableColumnAtSelection)}>刪除目前欄</DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={deleteCurrentTable}><Trash2 />刪除整個表格</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>}
+      {formatState.inTable && <Popover open={tableColorOpen} onOpenChange={setTableColorOpen}>
+        <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" onPointerDown={rememberFormatSelection}><Paintbrush />儲存格顏色</Button></PopoverTrigger>
+        <PopoverContent align="start" className="w-56">
+          <p className="mb-2 text-xs font-medium">儲存格顏色</p>
+          <button type="button" className="mb-3 flex h-8 w-full items-center gap-2 rounded-lg border px-2.5 text-sm hover:bg-accent" onClick={() => { applyTableCellBackground(null); setTableColorOpen(false); }}><span className="size-4 rounded border bg-white" />無色</button>
+          <div className="grid grid-cols-5 gap-2">
+            {HIGHLIGHT_COLORS.map((color) => <button key={`table-${color}`} type="button" aria-label={`儲存格顏色 ${color}`} className="size-7 rounded ring-1 ring-black/10 transition hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary" style={{ backgroundColor: color }} onClick={() => { applyTableCellBackground(color); setTableColorOpen(false); }} />)}
+          </div>
+        </PopoverContent>
+      </Popover>}
       <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" title="更多格式" aria-label="更多格式" onPointerDown={rememberFormatSelection}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "strikethrough")}><Strikethrough />刪除線</DropdownMenuItem><DropdownMenuItem onClick={() => editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined)}><ListChecks />待辦事項</DropdownMenuItem>{formatState.inTable && <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={deleteCurrentTable}><Trash2 />刪除表格</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>
       <Button type="button" variant="ghost" size="icon" title="設定反白工具" aria-label="設定反白工具" onClick={onOpenSelectionToolSettings}><Settings2 /></Button>
       <button type="button" className={cn("ml-auto flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs", saveState === "error" ? "text-destructive" : "text-muted-foreground")} onClick={onSaveNow} title="立即儲存"><StatusIcon className={cn("size-3.5", status.className)} />{status.text}</button>
@@ -1315,6 +1388,13 @@ function TableInteractionPlugin() {
       if (!root) return;
       const onPointerDown = (event: PointerEvent) => {
         if (event.button !== 0 || !(event.target instanceof Element)) return;
+        const cellElement = event.target.closest("td, th");
+        if (cellElement && root.contains(cellElement)) {
+          editor.read(() => {
+            const cell = findTableCellNode($getNearestNodeFromDOMNode(cellElement));
+            if (cell) lastTableCellKey.set(editor, cell.getKey());
+          });
+        }
         const wrapper = event.target.closest<HTMLElement>(".learning-table-scroll");
         const tableElement = wrapper?.querySelector<HTMLTableElement>(":scope > .learning-table");
         if (!wrapper || !tableElement || !root.contains(wrapper)) return;
@@ -1366,79 +1446,21 @@ function TableInteractionPlugin() {
   return null;
 }
 
-function BlockControls() {
+function SanitizedPastePlugin() {
   const [editor] = useLexicalComposerContext();
-  const [active, setActive] = useState<{ key: string; left: number; top: number } | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-
-  useEffect(() => {
-    const root = editor.getRootElement();
-    if (!root) return;
-    const locate = (target: EventTarget | null) => {
-      if (!(target instanceof Element) || !root.contains(target)) return;
-      editor.read(() => {
-        let nearest: LexicalNode | null = null;
-        try {
-          nearest = $getNearestNodeFromDOMNode(target);
-        } catch {
-          return;
-        }
-        const block = nearest?.getTopLevelElement();
-        if (!block) return;
-        const element = editor.getElementByKey(block.getKey());
-        if (!element) return;
-        const rect = element.getBoundingClientRect();
-        setActive({ key: block.getKey(), left: Math.max(6, rect.left - 40), top: rect.top + 2 });
-      });
-    };
-    const onMove = (event: MouseEvent) => locate(event.target);
-    const onFocus = (event: FocusEvent) => locate(event.target);
-    root.addEventListener("mousemove", onMove);
-    root.addEventListener("focusin", onFocus);
-    return () => { root.removeEventListener("mousemove", onMove); root.removeEventListener("focusin", onFocus); };
-  }, [editor]);
-
-  function changeBlock(action: "up" | "down" | "copy" | "delete") {
-    if (!active) return;
-    editor.update(() => {
-      const node = $getNodeByKey(active.key);
-      if (!node) return;
-      if (action === "up") { const previous = node.getPreviousSibling(); if (previous) previous.insertBefore(node); }
-      if (action === "down") { const next = node.getNextSibling(); if (next) next.insertAfter(node); }
-      if (action === "copy") node.insertAfter($copyNode(node));
-      if (action === "delete") node.remove();
-    });
-    if (action === "delete") setActive(null);
-  }
-
-  function toggleCollapse() {
-    if (!active) return;
-    const willCollapse = !collapsed.has(active.key);
-    editor.getElementByKey(active.key)?.classList.toggle("learning-block-collapsed", willCollapse);
-    setCollapsed((current) => { const next = new Set(current); if (willCollapse) next.add(active.key); else next.delete(active.key); return next; });
-  }
-
-  function finishDrag(event: React.DragEvent) {
-    if (!active) return;
-    const root = editor.getRootElement();
-    const targetElement = document.elementFromPoint(event.clientX, event.clientY);
-    if (!root || !targetElement || !root.contains(targetElement)) return;
-    editor.update(() => {
-      const source = $getNodeByKey(active.key);
-      const target = $getNearestNodeFromDOMNode(targetElement, editor.getEditorState())?.getTopLevelElement();
-      if (!source || !target || source.is(target)) return;
-      const targetDom = editor.getElementByKey(target.getKey());
-      if (!targetDom) return;
-      if (event.clientY < targetDom.getBoundingClientRect().top + targetDom.getBoundingClientRect().height / 2) target.insertBefore(source);
-      else target.insertAfter(source);
-    });
-  }
-
-  if (!active) return null;
-  return createPortal(<div data-learning-block-control className="fixed z-[70] flex items-center rounded-lg border bg-popover shadow-md" style={{ left: active.left, top: Math.max(8, active.top) }}>
-    <button type="button" draggable className="flex size-8 cursor-grab items-center justify-center text-muted-foreground active:cursor-grabbing" title="拖曳區塊" aria-label="拖曳區塊" onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", active.key); }} onDragEnd={finishDrag}><GripVertical className="size-4" /></button>
-    <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8" title="區塊選項"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start"><DropdownMenuItem onClick={() => changeBlock("up")}><ChevronUp />向上移動</DropdownMenuItem><DropdownMenuItem onClick={() => changeBlock("down")}><ChevronDown />向下移動</DropdownMenuItem><DropdownMenuItem onClick={() => changeBlock("copy")}><Copy />複製區塊</DropdownMenuItem><DropdownMenuItem onClick={toggleCollapse}>{collapsed.has(active.key) ? <ChevronDown /> : <ChevronUp />}{collapsed.has(active.key) ? "展開區塊" : "收合區塊"}</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => changeBlock("delete")}><Trash2 />刪除區塊</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
-  </div>, document.body);
+  useEffect(() => editor.registerCommand(PASTE_COMMAND, (event) => {
+    if (!(event instanceof ClipboardEvent)) return false;
+    const html = event.clipboardData?.getData("text/html");
+    if (!html) return false;
+    const dom = new DOMParser().parseFromString(html, "text/html");
+    sanitizePastedDocument(dom);
+    const nodes = $generateNodesFromDOM(editor, dom);
+    if (!nodes.length) return false;
+    event.preventDefault();
+    $insertNodes(nodes);
+    return true;
+  }, COMMAND_PRIORITY_HIGH), [editor]);
+  return null;
 }
 
 function SelectionToolbar({ position, editor, onAnnotate, onLink, tools }: { position: { left: number; top: number }; editor: LexicalEditor; onAnnotate: () => void; onLink: () => void; tools: SelectionToolId[] }) {
@@ -2072,6 +2094,15 @@ function setCssProperty(style: string, property: string, value: string) {
   declaration.cssText = style;
   declaration.setProperty(property, value);
   return declaration.cssText;
+}
+
+function sanitizePastedDocument(dom: Document) {
+  for (const element of dom.body.querySelectorAll<HTMLElement>("*")) {
+    element.style.removeProperty("background");
+    element.style.removeProperty("background-color");
+    element.removeAttribute("bgcolor");
+  }
+  for (const mark of dom.body.querySelectorAll("mark")) mark.replaceWith(...mark.childNodes);
 }
 
 function looksLikeHtml(value: string) {
