@@ -14,11 +14,15 @@ export function SearchableParentSelect({
   onChange,
   options,
   placeholder = "選擇上層節點",
+  searchPlaceholder = "搜尋主題或節點…",
+  emptyMessage = "找不到符合的主題或節點。",
 }: {
   value: string;
   onChange: (value: string) => void;
   options: ParentOption[];
   placeholder?: string;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -36,12 +40,12 @@ export function SearchableParentSelect({
       </Button>
     </PopoverTrigger>
     <PopoverContent align="start" className="w-[min(28rem,calc(100vw-2rem))] p-2">
-      <div className="relative mb-2"><Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋科目或節點…" className="pl-8" /></div>
-      <div className="max-h-64 overflow-y-auto">
+      <div className="relative mb-2"><Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} className="pl-8" /></div>
+      <div className="max-h-64 overflow-y-auto overscroll-contain pr-1" onWheel={(event) => event.stopPropagation()}>
         {filtered.map((option) => <button key={option.value} type="button" className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent", option.value === value && "bg-accent")} onClick={() => { onChange(option.value); setOpen(false); setQuery(""); }}>
           <Check className={cn("size-4 shrink-0", option.value === value ? "opacity-100" : "opacity-0")} /><span className="truncate">{option.label}</span>
         </button>)}
-        {!filtered.length && <p className="px-3 py-6 text-center text-sm text-muted-foreground">找不到符合的科目或節點。</p>}
+        {!filtered.length && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>}
       </div>
     </PopoverContent>
   </Popover>;

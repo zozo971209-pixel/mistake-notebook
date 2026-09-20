@@ -13,9 +13,15 @@ export const metadata: Metadata = {
     default: "學習地圖",
     template: "%s｜學習地圖",
   },
-  description: "自由整理科目架構，讓每一道錯題連回真正需要補強的知識節點。",
+  description: "自由整理主題與架構圖，讓每一道錯題連回真正需要補強的知識節點。",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/app-icon.svg", apple: "/app-icon.svg" },
+  icons: {
+    icon: [
+      { url: "/app-logo-v2-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/app-logo-v2-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/app-logo-v2-180.png",
+  },
 };
 
 export default function RootLayout({

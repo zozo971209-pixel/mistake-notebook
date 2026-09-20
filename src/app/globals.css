@@ -130,12 +130,16 @@
       radial-gradient(circle at 8% -10%, rgb(79 70 229 / 0.08), transparent 30rem),
       linear-gradient(to bottom, rgb(255 255 255 / 0.32), transparent 24rem);
     min-height: 100dvh;
+    max-width: 100%;
+    overflow-x: clip;
     padding-block: var(--safe-area-top) var(--safe-area-bottom);
     padding-inline: var(--safe-area-left) var(--safe-area-right);
   }
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
+    max-width: 100%;
+    overflow-x: clip;
     text-size-adjust: 100%;
   }
 }
@@ -230,6 +234,58 @@
   overflow-wrap: anywhere;
 }
 
+.learning-editor > * {
+  transition: opacity 120ms ease, max-height 160ms ease;
+}
+
+.learning-block-collapsed {
+  max-height: 2.6rem !important;
+  opacity: 0.58;
+  overflow: hidden !important;
+}
+
+.learning-decorator-node {
+  position: relative;
+}
+
+.learning-omission-node {
+  display: inline;
+}
+
+.learning-omission {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.learning-omission-toggle {
+  appearance: none;
+  display: inline;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: #6d28d9;
+  background: transparent;
+  background-image: linear-gradient(#8b5cf6, #8b5cf6);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.learning-omission-hidden {
+  background-color: #f5f3ff;
+}
+
+.learning-editor hr {
+  border: 0;
+  border-top: 1px solid #cbd5e1;
+  margin-block: 1.5rem;
+}
+
 .learning-paragraph {
   margin-bottom: 0.8rem;
 }
@@ -250,8 +306,6 @@
 
 .learning-link {
   color: #4338ca;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .learning-ul,
@@ -307,26 +361,124 @@
 }
 
 .learning-annotation-mark {
-  background: #fef3c7;
-  border-bottom: 2px solid #f59e0b;
-  border-radius: 0.15rem;
-  cursor: help;
+  color: inherit;
+  background-color: transparent;
+  cursor: pointer;
 }
 
-.learning-annotation-overlap {
-  background: #fde68a;
-  border-bottom-color: #d97706;
+.learning-annotation-segment {
+  background-image: linear-gradient(var(--annotation-color, #f59e0b), var(--annotation-color, #f59e0b));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.learning-annotation-edge-start:not(.learning-annotation-edge-end) {
+  background-position: 2px 100%;
+  background-size: calc(100% - 2px) 1px;
+}
+
+.learning-annotation-edge-end:not(.learning-annotation-edge-start) {
+  background-position: 0 100%;
+  background-size: calc(100% - 2px) 1px;
+}
+
+.learning-annotation-edge-start.learning-annotation-edge-end {
+  background-position: 2px 100%;
+  background-size: calc(100% - 4px) 1px;
+}
+
+.learning-annotation-focus {
+  animation: learning-annotation-focus-pulse 420ms ease-out;
+  background-color: rgb(219 234 254 / 0.5);
+  border-top: 2px solid #2563eb;
+  border-bottom: 2px solid #2563eb;
+  box-decoration-break: clone;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  -webkit-box-decoration-break: clone;
+}
+
+.learning-annotation-focus.learning-annotation-focus-start {
+  border-bottom-left-radius: 6px;
+  border-left: 2px solid #2563eb;
+  border-top-left-radius: 6px;
+  padding-left: 3px;
+}
+
+.learning-annotation-focus.learning-annotation-focus-end {
+  border-bottom-right-radius: 6px;
+  border-right: 2px solid #2563eb;
+  border-top-right-radius: 6px;
+  padding-right: 3px;
+}
+
+@keyframes learning-annotation-focus-pulse {
+  from {
+    filter: drop-shadow(0 3px 4px rgb(37 99 235 / 0.42));
+  }
+  to {
+    filter: drop-shadow(0 0 0 rgb(37 99 235 / 0));
+  }
+}
+
+.learning-editor[contenteditable="true"] .learning-annotation-mark {
+  cursor: text;
+}
+
+.learning-editor[contenteditable="true"] .learning-annotation-segment {
+  cursor: text;
+}
+
+.learning-search-result {
+  background: #fef08a;
+  border-radius: 0.2rem;
+  box-shadow: 0 0 0 2px #facc15;
 }
 
 .learning-table {
+  background: transparent;
   border-collapse: collapse;
   margin-block: 1rem;
   table-layout: fixed;
   width: 100%;
 }
 
+.learning-table-scroll {
+  clear: both;
+  max-width: 100%;
+  overflow: auto;
+  position: relative;
+}
+
+.learning-editor[contenteditable="true"] .learning-table-scroll::after {
+  background: linear-gradient(90deg, transparent, rgb(37 99 235 / 0.32));
+  content: "";
+  cursor: col-resize;
+  inset: 0 0 0 auto;
+  position: absolute;
+  width: 12px;
+}
+
+.learning-table-scroll:has(> .learning-table[style*="width"]) {
+  clear: none;
+  float: left;
+  margin-right: 1rem;
+  max-width: 100%;
+  width: fit-content;
+}
+
+.learning-table-scroll.learning-table-resizing {
+  outline: 2px solid rgb(37 99 235 / 0.45);
+  outline-offset: 2px;
+  user-select: none;
+}
+
 .learning-table-cell,
 .learning-table-cell-header {
+  background: transparent;
   border: 1px solid #cbd5e1;
   min-width: 5rem;
   padding: 0.5rem;
@@ -334,7 +486,6 @@
 }
 
 .learning-table-cell-header {
-  background: #f1f5f9;
   font-weight: 600;
 }
 

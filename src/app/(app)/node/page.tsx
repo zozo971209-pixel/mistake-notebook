@@ -9,6 +9,9 @@ export default function OutlineNodePage() {
 }
 
 function OutlineNodeContent() {
-  const id = useSearchParams().get("id") ?? "";
-  return <NodeDetail nodeId={id} />;
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id") ?? "";
+  const requestedReturnTo = searchParams.get("returnTo") ?? "";
+  const returnTo = requestedReturnTo.startsWith("/outline?") ? requestedReturnTo : "/outline";
+  return <NodeDetail nodeId={id} initialReadingMode={searchParams.get("reading") === "1"} returnTo={returnTo} />;
 }

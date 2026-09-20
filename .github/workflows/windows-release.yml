@@ -26,7 +26,7 @@ jobs:
         run: npm ci
 
       - name: Generate desktop icons
-        run: npm run tauri -- icon public/app-icon.svg
+        run: npm run tauri -- icon public/app-logo-v2-master.png
 
       - name: Build Windows installer
         run: npm run tauri -- build --bundles nsis

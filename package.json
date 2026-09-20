@@ -1,6 +1,6 @@
 {
   "name": "mistake-notebook",
-  "version": "0.1.6",
+  "version": "0.1.36",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1,18 +1,26 @@
 import { emptyAnswerConfig } from "@/lib/questions/answer-config";
 import type {
   LearningMapBackup,
+  LocalDiagram,
+  LocalKnowledgeCard,
   LocalOutlineNode,
   LocalQuestion,
   LocalReviewRecord,
   LocalSettings,
   LocalSnapshot,
   LocalSubject,
+  LocalTrashItem,
+  OutlineSide,
 } from "@/lib/local-data/types";
 
 const DB_NAME = "learning-map-local";
-const DB_VERSION = 1;
-const STORES = ["subjects", "nodes", "questions", "reviews", "settings"] as const;
+const DB_VERSION = 4;
+const STORES = ["subjects", "diagrams", "knowledge_cards", "nodes", "questions", "reviews", "settings", "trash"] as const;
 type StoreName = (typeof STORES)[number];
+
+function isOutlineSide(value: unknown): value is OutlineSide {
+  return value === "left" || value === "right" || value === "top" || value === "bottom";
+}
 
 const DEFAULT_SUBJECTS = [
   ["國文", "#b45309"], ["英文", "#2563eb"], ["數學", "#7c3aed"],
@@ -67,32 +75,115 @@ async function getAll<T>(database: IDBDatabase, store: StoreName) {
   return requestResult(database.transaction(store, "readonly").objectStore(store).getAll()) as Promise<T[]>;
 }
 
+async function ensureDefaultDiagrams(database: IDBDatabase) {
+  const [subjects, diagrams, nodes] = await Promise.all([
+    getAll<LocalSubject>(database, "subjects"),
+    getAll<LocalDiagram>(database, "diagrams"),
+    getAll<LocalOutlineNode>(database, "nodes"),
+  ]);
+  const diagramById = new Map(diagrams.map((diagram) => [diagram.id, diagram]));
+  const defaults = new Map<string, LocalDiagram>();
+  const created: LocalDiagram[] = [];
+  const renamed: LocalDiagram[] = [];
+  const timestamp = new Date().toISOString();
+  for (const subject of subjects) {
+    let diagram = diagrams.find((item) => item.subject_id === subject.id && item.kind === "mind-map");
+    if (!diagram) {
+      diagram = {
+        id: crypto.randomUUID(), subject_id: subject.id, name: "心智圖", kind: "mind-map",
+        sort_order: diagrams.filter((item) => item.subject_id === subject.id).length + 1,
+        created_at: timestamp, updated_at: timestamp,
+      };
+      created.push(diagram);
+      diagramById.set(diagram.id, diagram);
+    } else if (diagram.name === "總覽心智圖") {
+      diagram = { ...diagram, name: "心智圖", updated_at: timestamp };
+      renamed.push(diagram);
+      diagramById.set(diagram.id, diagram);
+    }
+    defaults.set(subject.id, diagram);
+  }
+  const updatedNodes = nodes.flatMap((node) => {
+    const linked = node.diagram_id ? diagramById.get(node.diagram_id) : null;
+    if (linked?.subject_id === node.subject_id && linked.kind === "mind-map") return [];
+    const fallback = defaults.get(node.subject_id);
+    return fallback ? [{ ...node, diagram_id: fallback.id, updated_at: node.updated_at || timestamp }] : [];
+  });
+  if (!created.length && !renamed.length && !updatedNodes.length) return;
+  const transaction = database.transaction(["diagrams", "nodes"], "readwrite");
+  created.forEach((diagram) => transaction.objectStore("diagrams").put(diagram));
+  renamed.forEach((diagram) => transaction.objectStore("diagrams").put(diagram));
+  updatedNodes.forEach((node) => transaction.objectStore("nodes").put(node));
+  await transactionDone(transaction);
+}
+
 export async function loadLocalSnapshot(): Promise<LocalSnapshot> {
   const database = await openLocalDatabase();
   await seedDefaults(database);
-  const [subjects, nodes, questions, reviews, settings] = await Promise.all([
+  await ensureDefaultDiagrams(database);
+  const [subjects, diagrams, knowledgeCards, nodes, questions, reviews, trash, settings] = await Promise.all([
     getAll<LocalSubject>(database, "subjects"),
+    getAll<LocalDiagram>(database, "diagrams"),
+    getAll<LocalKnowledgeCard>(database, "knowledge_cards"),
     getAll<LocalOutlineNode>(database, "nodes"),
     getAll<LocalQuestion>(database, "questions"),
     getAll<LocalReviewRecord>(database, "reviews"),
+    getAll<LocalTrashItem>(database, "trash"),
     requestResult(database.transaction("settings", "readonly").objectStore("settings").get("app")) as Promise<LocalSettings>,
   ]);
   database.close();
+  const normalizedKnowledgeCards = knowledgeCards.map((card) => ({
+    ...card,
+    content: typeof card.content === "string" ? card.content : "",
+    source_note: typeof card.source_note === "string" ? card.source_note : "",
+    tags: Array.isArray(card.tags) ? card.tags : [],
+  })).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+  const knowledgeCardById = new Map(normalizedKnowledgeCards.map((card) => [card.id, card]));
+  const normalizedNodes = nodes.map((node, index) => {
+    const legacyCard = node.knowledge_card_id ? knowledgeCardById.get(node.knowledge_card_id) : undefined;
+    return {
+      ...node,
+      content: legacyCard?.content?.trim() ? legacyCard.content : (typeof node.content === "string" ? node.content : ""),
+      layout_side: isOutlineSide(node.layout_side) ? node.layout_side : undefined,
+      layout_side_locked: node.layout_side_locked === true,
+      color: typeof node.color === "string" ? node.color : null,
+      position_x: Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250,
+      position_y: Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110,
+      resources: Array.isArray(node.resources) ? node.resources : [],
+    };
+  }).sort((a, b) => a.sort_order - b.sort_order);
+  const nodeByLegacyCardId = new Map(normalizedNodes.flatMap((node) => node.knowledge_card_id ? [[node.knowledge_card_id, node.id] as const] : []));
   return {
     subjects: subjects.map((subject) => ({
       ...subject,
       content: typeof subject.content === "string" ? subject.content : "",
       resources: Array.isArray(subject.resources) ? subject.resources : [],
     })).sort((a, b) => a.sort_order - b.sort_order),
-    nodes: nodes.map((node, index) => ({
-      ...node,
-      color: typeof node.color === "string" ? node.color : null,
-      position_x: Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250,
-      position_y: Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110,
-      resources: Array.isArray(node.resources) ? node.resources : [],
-    })).sort((a, b) => a.sort_order - b.sort_order),
+    diagrams: diagrams.map((diagram) => {
+      const mapContent = diagram.kind === "map" && diagram.map_content?.source_format === "high-school-geography-map-spec"
+        ? {
+            ...diagram.map_content,
+            features: diagram.map_content.features.map((feature) => ({
+              ...feature,
+              linked_node_id: typeof feature.linked_node_id === "string"
+                ? feature.linked_node_id
+                : typeof feature.knowledge_card_id === "string"
+                  ? nodeByLegacyCardId.get(feature.knowledge_card_id)
+                  : undefined,
+            })),
+          }
+        : undefined;
+      return {
+        ...diagram,
+        map_content: mapContent,
+        timeline_content: diagram.kind === "timeline" && Array.isArray(diagram.timeline_content?.placements) ? diagram.timeline_content : undefined,
+      };
+    }).sort((a, b) => a.sort_order - b.sort_order),
+    knowledge_cards: normalizedKnowledgeCards,
+    nodes: normalizedNodes,
     questions: questions.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     reviews: reviews.sort((a, b) => Date.parse(b.reviewed_at) - Date.parse(a.reviewed_at)),
+    trash: trash.sort((a, b) => Date.parse(b.deleted_at) - Date.parse(a.deleted_at)),
     settings,
   };
 }
@@ -133,7 +224,7 @@ export async function deleteQuestionCascade(id: string) {
 }
 
 export function createBackup(snapshot: LocalSnapshot): LearningMapBackup {
-  return { format: "learning-map-backup", version: 1, exportedAt: new Date().toISOString(), data: snapshot };
+  return { format: "learning-map-backup", version: 4, exportedAt: new Date().toISOString(), data: snapshot };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -141,7 +232,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseBackup(value: unknown): LearningMapBackup {
-  if (!isObject(value) || value.format !== "learning-map-backup" || value.version !== 1 || !isObject(value.data)) {
+  if (!isObject(value) || value.format !== "learning-map-backup" || ![1, 2, 3, 4].includes(Number(value.version)) || !isObject(value.data)) {
     throw new Error("這不是有效的學習地圖備份檔。");
   }
   const data = value.data;
@@ -153,38 +244,59 @@ export function parseBackup(value: unknown): LearningMapBackup {
   if (!arrays.every((key) => hasIds(data[key] as unknown[]))) throw new Error("備份包含無效資料識別碼。");
 
   const subjects = data.subjects as unknown as LocalSubject[];
+  const diagrams = Array.isArray(data.diagrams) ? data.diagrams as unknown as LocalDiagram[] : [];
+  const knowledgeCards = Array.isArray(data.knowledge_cards) ? data.knowledge_cards as unknown as LocalKnowledgeCard[] : [];
   const nodes = data.nodes as unknown as LocalOutlineNode[];
   const questions = data.questions as unknown as LocalQuestion[];
   const reviews = data.reviews as unknown as LocalReviewRecord[];
+  const trash = Array.isArray(data.trash) ? data.trash as unknown as LocalTrashItem[] : [];
   const subjectIds = new Set(subjects.map((item) => item.id));
+  const diagramById = new Map(diagrams.map((item) => [item.id, item]));
   const nodeIds = new Set(nodes.map((item) => item.id));
   const questionIds = new Set(questions.map((item) => item.id));
+  const knowledgeCardIds = new Set(knowledgeCards.map((item) => item.id));
   if (nodes.some((node) => !subjectIds.has(node.subject_id) || (node.parent_id && !nodeIds.has(node.parent_id)))) throw new Error("備份包含找不到上層的節點。");
-  if (questions.some((question) => question.subject_id && !subjectIds.has(question.subject_id))) throw new Error("備份包含找不到科目的錯題。");
+  if (diagrams.some((diagram) => !subjectIds.has(diagram.subject_id) || !["mind-map", "timeline", "map"].includes(diagram.kind))) throw new Error("備份包含無效的架構圖。");
+  if (diagrams.some((diagram) => diagram.map_content && (diagram.kind !== "map" || diagram.map_content.source_format !== "high-school-geography-map-spec" || !Array.isArray(diagram.map_content.layers) || !Array.isArray(diagram.map_content.features)))) {
+    throw new Error("備份包含無效的地圖內容。");
+  }
+  if (nodes.some((node) => node.diagram_id && diagramById.get(node.diagram_id)?.subject_id !== node.subject_id)) throw new Error("備份包含找不到架構圖的節點。");
+  if (!hasIds(knowledgeCards) || knowledgeCards.some((card) => !subjectIds.has(card.subject_id))) throw new Error("備份包含無效的共用知識卡。");
+  if (nodes.some((node) => node.knowledge_card_id && !knowledgeCardIds.has(node.knowledge_card_id))) throw new Error("備份包含找不到共用知識卡的節點。");
+  if (questions.some((question) => question.subject_id && !subjectIds.has(question.subject_id))) throw new Error("備份包含找不到主題的錯題。");
   if (reviews.some((review) => !questionIds.has(review.question_id))) throw new Error("備份包含找不到題目的複習紀錄。");
+  if (!hasIds(trash) || trash.some((item) => !["subject", "node", "question"].includes(item.entity_type) || !isObject(item.payload))) {
+    throw new Error("備份包含無效的資源回收桶資料。");
+  }
   questions.forEach((question) => { question.answer_config ||= emptyAnswerConfig; });
   subjects.forEach((subject) => {
     subject.content = typeof subject.content === "string" ? subject.content : "";
     subject.resources = Array.isArray(subject.resources) ? subject.resources : [];
   });
   nodes.forEach((node, index) => {
+    node.layout_side = isOutlineSide(node.layout_side) ? node.layout_side : undefined;
+    node.layout_side_locked = node.layout_side_locked === true;
     node.color = typeof node.color === "string" ? node.color : null;
     node.position_x = Number.isFinite(node.position_x) ? node.position_x : 360 + (index % 4) * 250;
     node.position_y = Number.isFinite(node.position_y) ? node.position_y : 150 + (index % 4) * 110;
     node.resources = Array.isArray(node.resources) ? node.resources : [];
   });
-  return value as unknown as LearningMapBackup;
+  return { format: "learning-map-backup", version: 4, exportedAt: typeof value.exportedAt === "string" ? value.exportedAt : new Date().toISOString(), data: { subjects, diagrams, knowledge_cards: knowledgeCards, nodes, questions, reviews, trash, settings: data.settings as unknown as LocalSettings } };
 }
 
 export async function importBackup(backup: LearningMapBackup, mode: "merge" | "replace") {
   const database = await openLocalDatabase();
+  const existingIds = mode === "merge" ? Object.fromEntries(await Promise.all(STORES.map(async (store) => [store, new Set((await getAll<{ id: string }>(database, store)).map((item) => item.id))]))) as Record<StoreName, Set<string>> : null;
   const transaction = database.transaction(STORES, "readwrite");
   if (mode === "replace") STORES.forEach((store) => transaction.objectStore(store).clear());
-  backup.data.subjects.forEach((item) => transaction.objectStore("subjects").put(item));
-  backup.data.nodes.forEach((item) => transaction.objectStore("nodes").put(item));
-  backup.data.questions.forEach((item) => transaction.objectStore("questions").put(item));
-  backup.data.reviews.forEach((item) => transaction.objectStore("reviews").put(item));
-  transaction.objectStore("settings").put({ ...backup.data.settings, id: "app" });
+  backup.data.subjects.filter((item) => !existingIds?.subjects.has(item.id)).forEach((item) => transaction.objectStore("subjects").put(item));
+  backup.data.diagrams.filter((item) => !existingIds?.diagrams.has(item.id)).forEach((item) => transaction.objectStore("diagrams").put(item));
+  backup.data.knowledge_cards.filter((item) => !existingIds?.knowledge_cards.has(item.id)).forEach((item) => transaction.objectStore("knowledge_cards").put(item));
+  backup.data.nodes.filter((item) => !existingIds?.nodes.has(item.id)).forEach((item) => transaction.objectStore("nodes").put(item));
+  backup.data.questions.filter((item) => !existingIds?.questions.has(item.id)).forEach((item) => transaction.objectStore("questions").put(item));
+  backup.data.reviews.filter((item) => !existingIds?.reviews.has(item.id)).forEach((item) => transaction.objectStore("reviews").put(item));
+  backup.data.trash.filter((item) => !existingIds?.trash.has(item.id)).forEach((item) => transaction.objectStore("trash").put(item));
+  if (mode === "replace") transaction.objectStore("settings").put({ ...backup.data.settings, id: "app" });
   await transactionDone(transaction);
   database.close();
 }

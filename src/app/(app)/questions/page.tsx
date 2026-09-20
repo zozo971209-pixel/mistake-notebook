@@ -31,7 +31,7 @@ export default function QuestionsPage() {
     <QuestionBankAI questions={questions} subjects={subjects} />
     <div className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-[1fr_180px]">
       <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="搜尋題目、標題或節點" /></div>
-      <select className="h-10 rounded-md border bg-background px-3 text-sm" value={subjectId} onChange={(event) => setSubjectId(event.target.value)}><option value="">全部科目</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select>
+      <select className="h-10 rounded-md border bg-background px-3 text-sm" value={subjectId} onChange={(event) => setSubjectId(event.target.value)}><option value="">全部主題</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select>
       <div className="flex flex-wrap gap-2 md:col-span-2">{[["", "全部"], ["new", "新題"], ["learning", "學習中"], ["reviewing", "待複習"], ["mastered", "已掌握"]].map(([value, label]) => <Button key={value} size="sm" variant={status === value ? "default" : "outline"} onClick={() => setStatus(value)}>{label}</Button>)}</div>
     </div>
     {filtered.length === 0 ? <div className="rounded-2xl border border-dashed p-12 text-center"><BookOpen className="mx-auto size-8 text-muted-foreground" /><p className="mt-4 font-medium">找不到符合條件的錯題</p><p className="mt-2 text-sm text-muted-foreground">調整篩選，或新增一題。</p></div> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map((question) => {
