@@ -33,6 +33,7 @@ function texts(value: unknown) {
 }
 
 function verificationState(value: unknown): MapVerificationState {
+  if (value === "ready") return "verified";
   return value === "verified" || value === "partial" || value === "partially_verified" || value === "missing_source" || value === "conflicted" || value === "draft" ? value : "unverified";
 }
 
@@ -40,13 +41,13 @@ function normalizeLayer(value: unknown): LocalMapLayer {
   const item = record(value, "圖層資料格式錯誤。");
   const layerId = text(item.layer_id);
   const mapId = text(item.map_id);
-  const layerName = text(item.layer_name);
+  const layerName = text(item.layer_name, text(item.name));
   if (!layerId || !mapId || !layerName) throw new Error("圖層缺少 layer_id、map_id 或 layer_name。");
   return {
     layer_id: layerId,
     map_id: mapId,
     layer_name: layerName,
-    layer_kind: text(item.layer_kind, "custom"),
+    layer_kind: text(item.layer_kind, text(item.kind, "custom")),
     semantic_type: text(item.semantic_type, "note"),
     geometry_family: text(item.geometry_family, "annotation"),
     order: Number.isFinite(item.order) ? Number(item.order) : 0,
@@ -55,7 +56,7 @@ function normalizeLayer(value: unknown): LocalMapLayer {
     locked: item.locked === true,
     legend_group: typeof item.legend_group === "string" ? item.legend_group : null,
     blend_policy: typeof item.blend_policy === "string" ? item.blend_policy : null,
-    verification_state: verificationState(item.verification_state),
+    verification_state: verificationState(item.verification_state ?? item.quality_state),
     source_ids: texts(item.source_ids),
     style_defaults: item.style_defaults && typeof item.style_defaults === "object" && !Array.isArray(item.style_defaults) ? item.style_defaults as UnknownRecord : {},
     notes: typeof item.notes === "string" ? item.notes : null,
@@ -78,10 +79,38 @@ function normalizeFeature(value: unknown): LocalMapFeature {
     semantic_type: text(item.semantic_type, "note"),
     geometry_type: text(item.geometry_type, "Point"),
     geometry: item.geometry && typeof item.geometry === "object" && !Array.isArray(item.geometry) ? item.geometry as UnknownRecord : null,
-    verification_state: verificationState(item.verification_state),
+    verification_state: verificationState(item.verification_state ?? item.quality_state),
     source_ids: texts(item.source_ids),
     locked: item.locked === true,
     clickable: item.clickable !== false,
+  };
+}
+
+function normalizeSchematicFeature(value: unknown): LocalMapFeature {
+  const item = record(value, "示意圖要素格式錯誤。");
+  const featureId = text(item.feature_id);
+  const mapId = text(item.map_id);
+  const layerId = text(item.layer_id);
+  const label = text(item.label, text(item.feature_type) === "edge" ? "關聯" : "未命名要素");
+  if (!featureId || !mapId || !layerId) throw new Error("示意圖要素缺少 feature_id、map_id 或 layer_id。");
+  const featureType = text(item.feature_type, "node");
+  const geometry = featureType === "edge"
+    ? { type: "SchematicEdge" }
+    : { type: "SchematicPoint", position: record(item.position, `示意圖節點 ${featureId} 缺少 position。`) };
+  return {
+    ...item,
+    feature_id: featureId,
+    map_id: mapId,
+    layer_id: layerId,
+    label,
+    semantic_type: text(item.semantic_type, text(item.category, "note")),
+    geometry_type: featureType === "edge" ? "SchematicEdge" : "SchematicPoint",
+    geometry,
+    coordinate_space: "schematic",
+    verification_state: verificationState(item.verification_state ?? item.quality_state),
+    source_ids: texts(item.source_ids),
+    locked: item.locked === true,
+    clickable: featureType !== "edge" && item.clickable !== false,
   };
 }
 
@@ -110,9 +139,25 @@ export function parseGeographyMapSpec(value: unknown): ParsedMapSpec {
   const registry = array(root.map_registry).map((value) => record(value, "地圖登錄資料格式錯誤。"));
   if (!registry.length) throw new Error("地圖規格沒有可匯入的 map_registry。");
   const layerList = array(root.layers).map(normalizeLayer);
-  const featureList = array(root.features).map(normalizeFeature);
-  const annotationList = array(root.annotations).map(normalizeAnnotation);
-  const sourceCatalog = array(root.source_catalog).filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+  const geographicFeatures = array(root.features).map(normalizeFeature);
+  const schematicFeatures = array(root.schematic_features).map(normalizeSchematicFeature);
+  const featureList = [...geographicFeatures, ...schematicFeatures];
+  const annotationList = [
+    ...array(root.annotations).map(normalizeAnnotation),
+    ...array(root.semantic_regions).map((value) => {
+      const item = record(value, "語意區域格式錯誤。");
+      return normalizeAnnotation({ ...item, annotation_id: text(item.region_id), layer_id: text(item.layer_id, `context-${text(item.map_id)}`), annotation_type: "semantic-region", content: text(item.label) });
+    }),
+    ...array(root.image_space_features).map((value) => {
+      const item = record(value, "圖片座標要素格式錯誤。");
+      return normalizeAnnotation({ ...item, annotation_id: text(item.feature_id), layer_id: text(item.layer_id, `image-${text(item.map_id)}`), annotation_type: "image-space-feature", content: text(item.label), verification_state: item.quality_state });
+    }),
+    ...array(root.nonrendered_content).map((value) => {
+      const item = record(value, "非繪製內容格式錯誤。");
+      return normalizeAnnotation({ ...item, annotation_id: text(item.content_id), layer_id: text(item.layer_id, `nonrendered-${text(item.map_id)}`), annotation_type: "nonrendered-content", content: text(item.label) });
+    }),
+  ];
+  const sourceCatalog = array(root.source_catalog ?? root.source_evidence).filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item));
   const comparisonPresets = array(root.comparison_presets).filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item));
   const presentationTemplate = root.presentation_state_template && typeof root.presentation_state_template === "object" && !Array.isArray(root.presentation_state_template)
     ? root.presentation_state_template as UnknownRecord
@@ -122,8 +167,8 @@ export function parseGeographyMapSpec(value: unknown): ParsedMapSpec {
 
   const maps = registry.map((map) => {
     const mapId = text(map.map_id);
-    const name = text(map.map_name);
-    if (!mapId || !name) throw new Error("map_registry 內有地圖缺少 map_id 或 map_name。");
+    const name = text(map.map_name, text(map.title));
+    if (!mapId || !name) throw new Error("map_registry 內有地圖缺少 map_id 或名稱。");
     if (seenMapIds.has(mapId)) throw new Error(`map_registry 內有重複 map_id：${mapId}`);
     seenMapIds.add(mapId);
     const relatedLayerIds = new Set([...texts(map.default_layers), ...texts(map.allowed_overlay_layers)]);
@@ -140,7 +185,7 @@ export function parseGeographyMapSpec(value: unknown): ParsedMapSpec {
       topic: text(map.topic, "geography"),
       scope: text(map.scope, "world"),
       description: text(map.description),
-      verification_state: verificationState(map.verification_state),
+      verification_state: verificationState(map.verification_state ?? map.quality_state ?? map.status),
       source_units: texts(map.source_units),
       source_pages: array(map.source_pages).filter((item): item is string | number => typeof item === "string" || typeof item === "number"),
       source_nodes: texts(map.source_nodes),
@@ -150,8 +195,8 @@ export function parseGeographyMapSpec(value: unknown): ParsedMapSpec {
       features: ownFeatures,
       annotations: ownAnnotations,
       source_catalog: sourceCatalog.filter((source) => {
-        const id = text(source.source_id);
-        return id && (layers.some((layer) => layer.source_ids.includes(id)) || ownFeatures.some((feature) => feature.source_ids.includes(id)));
+        const id = text(source.source_id, text(source.evidence_id));
+        return texts(source.supports).includes(mapId) || Boolean(id && (layers.some((layer) => layer.source_ids.includes(id)) || ownFeatures.some((feature) => feature.source_ids.includes(id))));
       }),
       comparison_presets: relatedPresets,
       presentation: {
@@ -170,6 +215,16 @@ export function parseGeographyMapSpec(value: unknown): ParsedMapSpec {
   const knownMapIds = new Set(maps.map((map) => map.content.source_map_id));
   if (layerList.some((layer) => !knownMapIds.has(layer.map_id))) throw new Error("有圖層指向不存在的 map_id，尚未匯入任何內容。");
   if (featureList.some((feature) => !layerList.some((layer) => layer.layer_id === feature.layer_id))) throw new Error("有地圖要素指向不存在的圖層，尚未匯入任何內容。");
+  const schematicIds = new Set(schematicFeatures.map((feature) => feature.feature_id));
+  for (const feature of schematicFeatures) {
+    if (feature.geometry_type === "SchematicPoint") {
+      const position = feature.geometry?.position;
+      const point = position && typeof position === "object" && !Array.isArray(position) ? position as UnknownRecord : {};
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || Number(point.x) < 0 || Number(point.x) > 1 || Number(point.y) < 0 || Number(point.y) > 1) throw new Error(`示意圖節點 ${feature.feature_id} 的 x/y 必須介於 0 與 1。`);
+    } else if (!schematicIds.has(text(feature.from_feature_id)) || !schematicIds.has(text(feature.to_feature_id))) {
+      throw new Error(`示意圖連線 ${feature.feature_id} 指向不存在的節點。`);
+    }
+  }
 
   return {
     projectName: text(meta.project, "地理互動地圖"),

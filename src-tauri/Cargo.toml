@@ -1,6 +1,6 @@
 [package]
 name = "mistake-notebook"
-version = "0.1.37"
+version = "0.1.40"
 description = "Local-first learning map and mistake notebook"
 authors = ["zozo971209-pixel"]
 license = "UNLICENSED"

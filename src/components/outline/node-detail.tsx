@@ -54,9 +54,9 @@ function NodeEditor({ node, subject, initialReadingMode, returnTo }: { node: Loc
     ...data.subjects.map((item) => ({ value: `subject-${item.id}`, label: `主題：${item.name}`, href: `/subject?id=${encodeURIComponent(item.id)}`, keywords: item.name })),
     ...data.nodes.map((item) => {
       const itemSubject = data.subjects.find((candidate) => candidate.id === item.subject_id);
-      return { value: `node-${item.id}`, label: `${itemSubject?.name ?? "未分類"} / ${item.name}`, href: `/node?id=${encodeURIComponent(item.id)}`, keywords: `${itemSubject?.name ?? ""} ${item.name}` };
+      return { value: `node-${item.id}`, label: `${itemSubject?.name ?? "未分類"} / ${item.name}`, href: `/node?id=${encodeURIComponent(item.id)}&returnTo=${encodeURIComponent(returnTo)}`, keywords: `${itemSubject?.name ?? ""} ${item.name}` };
     }),
-  ], [data.nodes, data.subjects]);
+  ], [data.nodes, data.subjects, returnTo]);
 
   useEffect(() => {
     if (platform === "windows") window.localStorage.setItem("learning-map-last-node-id", node.id);
@@ -110,7 +110,13 @@ function NodeEditor({ node, subject, initialReadingMode, returnTo }: { node: Loc
     const diagramId = node.diagram_id ?? data.diagrams.find((diagram) => diagram.subject_id === node.subject_id && diagram.kind === "mind-map")?.id;
     if (!diagramId) return setMessage("找不到這個節點所屬的心智圖。");
     const id = await data.createNode(node.subject_id, diagramId, childName, node.id, childColor);
-    router.push(`/node?id=${encodeURIComponent(id)}`);
+    router.push(`/node?id=${encodeURIComponent(id)}&returnTo=${encodeURIComponent(returnTo)}`);
+  }
+
+  async function deleteCurrentNode() {
+    if (!window.confirm("將這個節點移到資源回收桶？子節點會暫時回到架構圖根部，之後可以還原。")) return;
+    await data.deleteNode(node.id);
+    router.push(returnTo);
   }
 
   const statusMessage = name.trim() ? message : "節點名稱不能空白。";
@@ -152,7 +158,7 @@ function NodeEditor({ node, subject, initialReadingMode, returnTo }: { node: Loc
                 <div className="grid gap-2"><Select value={resourceType} onValueChange={(value) => setResourceType(value as LocalNodeResource["type"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="image">圖片</SelectItem><SelectItem value="video">影片</SelectItem><SelectItem value="link">參考連結</SelectItem></SelectContent></Select><Input value={resourceTitle} onChange={(event) => setResourceTitle(event.target.value)} placeholder="名稱（選填）" /><Input type="url" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://…" /><Button type="button" variant="outline" onClick={addResource} disabled={!resourceUrl.trim()}><Plus />加入延伸資料</Button></div>
                 {resources.length === 0 ? <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">尚未加入延伸資料。</p> : <div className="space-y-3">{resources.map((resource) => <ResourceCard key={resource.id} resource={resource} onDelete={() => setResources((current) => current.filter((item) => item.id !== resource.id))} compact />)}</div>}
               </section>
-              <Button variant="destructive" className="w-full" onClick={() => { if (window.confirm("將這個節點移到資源回收桶？子節點會暫時回到架構圖根部，之後可以還原。")) { void data.deleteNode(node.id); router.push("/outline"); } }}><Trash2 />移到回收桶</Button>
+              <Button variant="destructive" className="w-full" onClick={() => void deleteCurrentNode()}><Trash2 />移到回收桶</Button>
             </TabsContent>
           </Tabs>
         </Card>
@@ -202,7 +208,7 @@ function NodeEditor({ node, subject, initialReadingMode, returnTo }: { node: Loc
           {resources.length === 0 ? <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">尚未加入延伸資料。</p> : <div className="space-y-3">{resources.map((resource) => <ResourceCard key={resource.id} resource={resource} onDelete={() => setResources((current) => current.filter((item) => item.id !== resource.id))} compact />)}</div>}
         </CardContent></Card>
 
-        <Button variant="destructive" className="w-full" onClick={() => { if (window.confirm("將這個節點移到資源回收桶？子節點會暫時回到架構圖根部，之後可以還原。")) { void data.deleteNode(node.id); router.push("/outline"); } }}><Trash2 />移到回收桶</Button>
+        <Button variant="destructive" className="w-full" onClick={() => void deleteCurrentNode()}><Trash2 />移到回收桶</Button>
       </aside>}
     </div>
   </div>;

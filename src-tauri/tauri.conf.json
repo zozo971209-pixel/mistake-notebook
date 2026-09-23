@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "學習地圖",
-  "version": "0.1.37",
+  "version": "0.1.40",
   "identifier": "app.learningmap.mistakenotebook",
   "build": {
     "frontendDist": "../out",
@@ -36,7 +36,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "icons/icon.ico": "learning-map-icon-0.1.37.ico"
+      "icons/icon.ico": "learning-map-icon-0.1.40.ico"
     },
     "windows": {
       "nsis": {
@@ -46,7 +46,7 @@
     "android": {
       "debugApplicationIdSuffix": ".debug",
       "minSdkVersion": 24,
-      "versionCode": 8
+      "versionCode": 9
     }
   }
 }

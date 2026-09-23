@@ -94,9 +94,16 @@ export type LocalSubject = {
 export type LocalTimelinePlacement = {
   id: string;
   node_id: string;
+  linked_node_ids?: string[];
   position_x: number;
   position_y: number;
   date_label: string;
+  title?: string;
+  description?: string;
+  primary_region?: string;
+  related_regions?: string[];
+  tags?: string[];
+  verification?: string;
 };
 
 export type LocalTimelineDocument = {
@@ -110,6 +117,8 @@ export type LocalDiagram = {
   subject_id: string;
   name: string;
   kind: DiagramKind;
+  root_card_label?: string;
+  root_card_hidden?: boolean;
   map_content?: LocalMapDocument;
   timeline_content?: LocalTimelineDocument;
   sort_order: number;
@@ -133,6 +142,7 @@ export type LocalOutlineNode = {
   subject_id: string;
   diagram_id?: string;
   knowledge_card_id?: string;
+  canonical_node_id?: string;
   parent_id: string | null;
   layout_side?: OutlineSide;
   layout_side_locked?: boolean;
@@ -208,11 +218,12 @@ export type LocalSettings = {
 
 export type LocalTrashItem = {
   id: string;
-  entity_type: "subject" | "node" | "question";
+  entity_type: "subject" | "diagram" | "node" | "question";
   title: string;
   deleted_at: string;
   payload: {
     subject?: LocalSubject;
+    diagram?: LocalDiagram;
     diagrams?: LocalDiagram[];
     knowledgeCards?: LocalKnowledgeCard[];
     node?: LocalOutlineNode;

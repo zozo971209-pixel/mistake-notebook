@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Brain, Check, Eye, EyeOff, Focus, Layers3, LockKeyhole, MapPinned, Minus, Search, ShieldAlert, X, ZoomIn } from "lucide-react";
+import { Eye, EyeOff, Focus, Layers3, LockKeyhole, MapPinned, Minus, Search, ShieldAlert, ZoomIn } from "lucide-react";
 import type { LocalDiagram, LocalKnowledgeCard, LocalMapDocument, LocalMapFeature, LocalMapLayer } from "@/lib/local-data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,6 @@ export function MapCanvas({ subjectName, diagram, knowledgeCards, onUpdate }: { 
   const [saveError, setSaveError] = useState("");
   const [baseFeatures, setBaseFeatures] = useState<BaseFeature[]>([]);
   const [showEmptyNotice, setShowEmptyNotice] = useState(!content?.features.length);
-  const [recallMode, setRecallMode] = useState(false);
-  const [answerRevealed, setAnswerRevealed] = useState(false);
-  const [recallScore, setRecallScore] = useState({ remembered: 0, missed: 0 });
   const [interactionActive, setInteractionActive] = useState(false);
   const dragRef = useRef<Drag | null>(null);
   const viewRef = useRef(view);
@@ -148,7 +145,6 @@ export function MapCanvas({ subjectName, diagram, knowledgeCards, onUpdate }: { 
           <span className="w-12 text-center text-xs tabular-nums">{Math.round(view.zoom * 100)}%</span>
           <Button variant="ghost" size="icon" title="放大" onClick={() => commitView({ ...view, zoom: clamp(view.zoom * 1.25, MIN_ZOOM, MAX_ZOOM) })}><ZoomIn /></Button>
           <Button variant="ghost" size="icon" title="回到世界全圖" onClick={() => commitView({ center: [0, 0], zoom: 1 })}><Focus /></Button>
-          <Button variant={recallMode ? "default" : "ghost"} size="sm" disabled={!content.features.length} onClick={() => { setRecallMode((current) => !current); setSelectedFeatureId(""); setAnswerRevealed(false); }}><Brain />{recallMode ? "結束回想" : "回想模式"}</Button>
         </div>
         {!interactionActive && <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-full border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm">點擊地圖後啟用縮放</div>}
         <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 size-full cursor-grab touch-none active:cursor-grabbing" onPointerDownCapture={() => setInteractionActive(true)} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onWheel={(event) => { if (!interactionActive) return; event.preventDefault(); commitView({ ...view, zoom: clamp(view.zoom * Math.exp(-event.deltaY * 0.0015), MIN_ZOOM, MAX_ZOOM) }); }}>
@@ -160,7 +156,7 @@ export function MapCanvas({ subjectName, diagram, knowledgeCards, onUpdate }: { 
             {[...content.layers].sort((a, b) => a.order - b.order).flatMap((layer) => {
               if (!visibleLayerIds.has(layer.layer_id)) return [];
               const opacity = content.presentation.layer_opacity[layer.layer_id] ?? layer.opacity;
-              return visibleFeatures.filter((feature) => feature.layer_id === layer.layer_id).map((feature) => <FeatureShape key={feature.feature_id} feature={feature} layer={layer} opacity={opacity} selected={feature.feature_id === selectedFeatureId} onSelect={() => { if (!feature.clickable) return; setSelectedFeatureId(feature.feature_id); setAnswerRevealed(false); }} />);
+              return visibleFeatures.filter((feature) => feature.layer_id === layer.layer_id).map((feature) => <FeatureShape key={feature.feature_id} feature={feature} layer={layer} opacity={opacity} selected={feature.feature_id === selectedFeatureId} onSelect={() => { if (!feature.clickable) return; setSelectedFeatureId(feature.feature_id); }} />);
             })}
           </g>
         </svg>
@@ -170,12 +166,9 @@ export function MapCanvas({ subjectName, diagram, knowledgeCards, onUpdate }: { 
 
       <aside className="border-t p-4 lg:border-l lg:border-t-0">
         <h3 className="font-semibold">資訊與來源</h3>
-        {selectedFeature ? recallMode && !answerRevealed ? (
-          <div className="mt-3 space-y-3 rounded-xl border border-primary/25 bg-primary/[0.04] p-4 text-center"><Brain className="mx-auto size-7 text-primary" /><p className="font-semibold">先回想這個區域</p><p className="text-sm text-muted-foreground">想好名稱、特徵與原因後再看答案。</p><Button className="w-full" onClick={() => setAnswerRevealed(true)}>顯示答案</Button></div>
-        ) : <>
+        {selectedFeature ? <>
           <FeatureInfo feature={selectedFeature} knowledgeCards={knowledgeCards.filter((card) => card.subject_id === diagram.subject_id)} onLink={(knowledgeCardId) => void persist({ ...content, features: content.features.map((feature) => feature.feature_id === selectedFeature.feature_id ? { ...feature, knowledge_card_id: knowledgeCardId || undefined } : feature) })} />
-          {recallMode && <div className="mt-4 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => { setRecallScore((score) => ({ ...score, missed: score.missed + 1 })); setSelectedFeatureId(""); }}><X />忘記</Button><Button onClick={() => { setRecallScore((score) => ({ ...score, remembered: score.remembered + 1 })); setSelectedFeatureId(""); }}><Check />記得</Button></div>}
-        </> : <div className="mt-3 space-y-3 text-sm"><p className="leading-6 text-muted-foreground">{recallMode ? "點選地圖要素開始回想；答案會先隱藏。" : "點選地圖要素後，在這裡查看名稱、說明與來源核對狀態。"}</p>{recallMode && <div className="rounded-xl border bg-primary/[0.04] p-3"><p className="text-xs text-muted-foreground">本次回想</p><p className="mt-1 font-medium">記得 {recallScore.remembered} · 忘記 {recallScore.missed}</p></div>}<div className="rounded-xl border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">目前內容</p><p className="mt-1 font-medium">{content.features.length} 個要素 · {content.annotations.length} 則註記</p></div><div className="rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-amber-950"><div className="flex gap-2"><ShieldAlert className="mt-0.5 size-4 shrink-0" /><p className="text-xs leading-5">{content.notes || "未核對內容不會標成正式教材。"}</p></div></div>{content.source_nodes.length > 0 && <div><p className="text-xs font-medium text-muted-foreground">來源節點</p><ul className="mt-1 space-y-1 text-sm">{content.source_nodes.map((node) => <li key={node}>• {node}</li>)}</ul></div>}</div>}
+        </> : <div className="mt-3 space-y-3 text-sm"><p className="leading-6 text-muted-foreground">點選地圖要素後，在這裡查看名稱、說明與來源核對狀態。</p><div className="rounded-xl border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">目前內容</p><p className="mt-1 font-medium">{content.features.length} 個要素 · {content.annotations.length} 則註記</p></div><div className="rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-amber-950"><div className="flex gap-2"><ShieldAlert className="mt-0.5 size-4 shrink-0" /><p className="text-xs leading-5">{content.notes || "未核對內容不會標成正式教材。"}</p></div></div>{content.source_nodes.length > 0 && <div><p className="text-xs font-medium text-muted-foreground">來源節點</p><ul className="mt-1 space-y-1 text-sm">{content.source_nodes.map((node) => <li key={node}>• {node}</li>)}</ul></div>}</div>}
         {saveError && <p className="mt-3 text-xs text-destructive">{saveError}</p>}
       </aside>
     </div>

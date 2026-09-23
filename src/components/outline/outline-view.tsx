@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Clock3, Download, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Network, Pencil, Plus, RotateCcw, Upload, ZoomIn } from "lucide-react";
+import { Clock3, Download, Focus, Grip, Map as MapIcon, Maximize2, Minimize2, Minus, Network, Pencil, Plus, RotateCcw, Trash2, Upload, ZoomIn } from "lucide-react";
 import { ColorPicker, OUTLINE_COLORS } from "@/components/outline/color-picker";
 import { DuplicateConceptHint } from "@/components/outline/duplicate-concept-hint";
 import { MapCanvas } from "@/components/outline/map-canvas-v2";
@@ -11,6 +11,7 @@ import { useAppPlatform } from "@/lib/app-platform";
 import { downloadJson } from "@/lib/download-json";
 import { useLocalData } from "@/lib/local-data/provider";
 import type { DiagramKind, LocalDiagram, LocalOutlineNode, OutlineSide } from "@/lib/local-data/types";
+import { arrangeMindMapNodes } from "@/lib/mind-map-layout";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -72,8 +73,6 @@ export function OutlineView() {
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
   const [quickNodeName, setQuickNodeName] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mindMapRecallMode, setMindMapRecallMode] = useState(false);
-  const [revealedNodeIds, setRevealedNodeIds] = useState<Set<string>>(() => new Set());
   const [selectedNodeId, setSelectedNodeId] = useState("");
   const [isSubjectDialogOpen, setIsSubjectDialogOpen] = useState(false);
   const [isDiagramDialogOpen, setIsDiagramDialogOpen] = useState(false);
@@ -81,6 +80,7 @@ export function OutlineView() {
   const [exportDiagramId, setExportDiagramId] = useState("");
   const [renameDiagramId, setRenameDiagramId] = useState("");
   const [renameDiagramName, setRenameDiagramName] = useState("");
+  const [editingRootCard, setEditingRootCard] = useState(false);
   const [selectionHydrated, setSelectionHydrated] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -142,6 +142,7 @@ export function OutlineView() {
   const subject = data.subjects.find((item) => item.id === effectiveSubjectId) ?? null;
   const diagrams = useMemo(() => data.diagrams.filter((diagram) => diagram.subject_id === effectiveSubjectId), [data.diagrams, effectiveSubjectId]);
   const diagram = diagrams.find((item) => item.id === diagramId) ?? null;
+  const activeDiagramId = diagram?.id ?? "";
   const nodes = useMemo(() => data.nodes.filter((node) => node.diagram_id === diagram?.id), [data.nodes, diagram?.id]);
 
   useEffect(() => {
@@ -155,9 +156,9 @@ export function OutlineView() {
   }, [diagramId, diagrams, effectiveSubjectId, selectionHydrated]);
 
   useEffect(() => {
-    if (!selectionHydrated || !diagram) return;
-    window.localStorage.setItem(`${LAST_DIAGRAM_STORAGE_PREFIX}${effectiveSubjectId}`, diagram.id);
-    const raw = window.localStorage.getItem(`${VIEWPORT_STORAGE_PREFIX}${diagram.id}`);
+    if (!selectionHydrated || !activeDiagramId) return;
+    window.localStorage.setItem(`${LAST_DIAGRAM_STORAGE_PREFIX}${effectiveSubjectId}`, activeDiagramId);
+    const raw = window.localStorage.getItem(`${VIEWPORT_STORAGE_PREFIX}${activeDiagramId}`);
     let restored: Viewport | null = null;
     if (raw) {
       try {
@@ -167,14 +168,14 @@ export function OutlineView() {
         }
       } catch {}
     }
-    viewportDiagramRef.current = diagram.id;
-    const rememberedNodeId = window.localStorage.getItem(`${LAST_NODE_STORAGE_PREFIX}${diagram.id}`) ?? "";
+    viewportDiagramRef.current = activeDiagramId;
+    const rememberedNodeId = window.localStorage.getItem(`${LAST_NODE_STORAGE_PREFIX}${activeDiagramId}`) ?? "";
     const frame = window.requestAnimationFrame(() => {
       setViewport(restored ?? centeredOnRoot(mapRef.current, INITIAL_VIEWPORT.scale));
       setSelectedNodeId(rememberedNodeId);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [diagram, effectiveSubjectId, selectionHydrated]);
+  }, [activeDiagramId, effectiveSubjectId, selectionHydrated]);
 
   useEffect(() => {
     if (!selectionHydrated || !diagram || viewportDiagramRef.current !== diagram.id) return;
@@ -260,14 +261,58 @@ export function OutlineView() {
     const name = renameDiagramName.trim();
     if (!renameDiagramId || !name) return;
     try {
-      await data.updateDiagram(renameDiagramId, { name });
+      await data.updateDiagram(renameDiagramId, editingRootCard ? { root_card_label: name } : { name });
       setRenameDiagramId("");
+      setEditingRootCard(false);
       setMessageError(false);
-      setMessage(`架構圖已改名為「${name}」。`);
+      setMessage(editingRootCard ? `中心字卡已改名為「${name}」。` : `架構圖已改名為「${name}」。`);
     } catch (error) {
       setMessageError(true);
       setMessage(error instanceof Error ? error.message : "無法重新命名架構圖。");
     }
+  }
+
+  async function deleteSelectedDiagram() {
+    const selected = data.diagrams.find((item) => item.id === renameDiagramId);
+    if (!selected) return;
+    if (editingRootCard) {
+      if (!window.confirm("刪除中心字卡？其他節點、主題與架構圖都會保留。")) return;
+      try {
+        await data.updateDiagram(selected.id, { root_card_hidden: true });
+        setRenameDiagramId("");
+        setEditingRootCard(false);
+        setMessageError(false);
+        setMessage("已刪除中心字卡；其他節點、主題與架構圖均未變更。可從架構圖的編輯視窗恢復中心字卡。");
+      } catch (error) {
+        setMessageError(true);
+        setMessage(error instanceof Error ? error.message : "無法刪除中心字卡。");
+      }
+      return;
+    }
+    if (!window.confirm(`刪除「${selected.name}」？只會移除這張架構圖及其中節點，不會刪除「${subject?.name ?? "目前"}」主題或其他架構圖；可從資源回收桶還原。`)) return;
+    try {
+      const nextDiagram = diagrams.find((item) => item.id !== selected.id);
+      await data.deleteDiagram(selected.id);
+      setRenameDiagramId("");
+      setEditingRootCard(false);
+      setDiagramId(nextDiagram?.id ?? "");
+      setParentId("root");
+      setSelectedNodeId("");
+      setMessageError(false);
+      setMessage(`已將架構圖「${selected.name}」移到資源回收桶；主題與其他架構圖未受影響。`);
+    } catch (error) {
+      setMessageError(true);
+      setMessage(error instanceof Error ? error.message : "無法刪除架構圖。");
+    }
+  }
+
+  async function restoreRootCard() {
+    if (!renameDiagramId) return;
+    await data.updateDiagram(renameDiagramId, { root_card_hidden: false });
+    setRenameDiagramId("");
+    setEditingRootCard(false);
+    setMessageError(false);
+    setMessage("已恢復中心字卡。");
   }
 
   async function addNode() {
@@ -278,7 +323,9 @@ export function OutlineView() {
       setParentId("root");
       setMessage("");
       setMessageError(false);
-      router.push(`/node?id=${encodeURIComponent(id)}`);
+      const returnParams = new URLSearchParams({ subject: subject.id, diagram: diagram.id });
+      if (isFullscreen) returnParams.set("fullscreen", "1");
+      router.push(`/node?${new URLSearchParams({ id, returnTo: `/outline?${returnParams.toString()}` }).toString()}`);
     } catch (error) {
       setMessageError(true);
       setMessage(error instanceof Error ? error.message : "無法新增節點。");
@@ -287,7 +334,17 @@ export function OutlineView() {
 
   async function autoArrange() {
     if (!subject || !diagram || diagram.kind !== "mind-map" || !nodes.length) return;
-    const positions = arrangeMindMapNodes(nodes, positionOf);
+    const positions = arrangeMindMapNodes(nodes, positionOf, {
+      root: ROOT,
+      nodeWidth: NODE_WIDTH,
+      nodeHeight: NODE_HEIGHT,
+      horizontalBranchGap: HORIZONTAL_BRANCH_GAP,
+      verticalBranchGap: VERTICAL_BRANCH_GAP,
+      horizontalSiblingGap: HORIZONTAL_SIBLING_GAP,
+      verticalSiblingGap: VERTICAL_SIBLING_GAP,
+      directionalGroupGap: 96,
+      positionLimit: POSITION_LIMIT,
+    });
     await data.updateNodes(positions);
     setMoving({});
     setViewport(centeredOnRoot(mapRef.current, viewport.scale));
@@ -297,11 +354,12 @@ export function OutlineView() {
 
   function openMindMapNode(nodeId: string) {
     if (!subject || !diagram) return;
+    const targetNodeId = nodes.find((node) => node.id === nodeId)?.canonical_node_id ?? nodeId;
     setSelectedNodeId(nodeId);
     window.localStorage.setItem(`${LAST_NODE_STORAGE_PREFIX}${diagram.id}`, nodeId);
     const returnParams = new URLSearchParams({ subject: subject.id, diagram: diagram.id });
     if (isFullscreen) returnParams.set("fullscreen", "1");
-    const nodeParams = new URLSearchParams({ id: nodeId, returnTo: `/outline?${returnParams.toString()}` });
+    const nodeParams = new URLSearchParams({ id: targetNodeId, returnTo: `/outline?${returnParams.toString()}` });
     router.push(`/node?${nodeParams.toString()}`);
   }
 
@@ -520,7 +578,7 @@ export function OutlineView() {
           const option = DIAGRAM_OPTIONS.find((candidate) => candidate.value === item.kind)!;
           const Icon = option.icon;
           const active = diagram?.id === item.id;
-          return <div key={item.id} className={`flex min-w-0 items-center rounded-xl border transition ${active ? "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/20" : "bg-background hover:border-primary/35 hover:bg-accent/30"}`}><button type="button" aria-pressed={active} onClick={() => { setDiagramId(item.id); setParentId("root"); setCurrentDropPreview(null); setIsFullscreen(false); setMindMapRecallMode(false); setRevealedNodeIds(new Set()); }} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"><span className={`grid size-10 shrink-0 place-items-center rounded-xl ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Icon className="size-5" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><small className="mt-0.5 block text-xs text-muted-foreground">{option.label}</small></span></button><Button variant="ghost" size="icon" className="mr-2 shrink-0" title="重新命名" onClick={() => { setRenameDiagramId(item.id); setRenameDiagramName(item.name); }}><Pencil className="size-4" /></Button></div>;
+          return <div key={item.id} className={`flex min-w-0 items-center rounded-xl border transition ${active ? "border-primary bg-primary/[0.06] shadow-sm ring-1 ring-primary/20" : "bg-background hover:border-primary/35 hover:bg-accent/30"}`}><button type="button" aria-pressed={active} onClick={() => { setDiagramId(item.id); setParentId("root"); setCurrentDropPreview(null); setIsFullscreen(false); }} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"><span className={`grid size-10 shrink-0 place-items-center rounded-xl ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Icon className="size-5" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><small className="mt-0.5 block text-xs text-muted-foreground">{option.label}</small></span></button><Button variant="ghost" size="icon" className="mr-2 shrink-0" title="編輯架構圖" onClick={() => { setEditingRootCard(false); setRenameDiagramId(item.id); setRenameDiagramName(item.name); }}><Pencil className="size-4" /></Button></div>;
         })}</div>
       </div>}
       {subject && diagram?.kind === "mind-map" && <div className="mt-4 grid gap-2 border-t pt-4 md:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
@@ -539,29 +597,29 @@ export function OutlineView() {
 
     <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}><DialogContent><DialogHeader><DialogTitle>匯出架構圖</DialogTitle><DialogDescription>選擇要單獨匯出的架構圖；不會修改目前資料。</DialogDescription></DialogHeader><div className="space-y-2 py-2"><Label htmlFor="export-diagram">架構圖</Label><Select value={exportDiagramId} onValueChange={setExportDiagramId}><SelectTrigger id="export-diagram"><SelectValue placeholder="選擇架構圖" /></SelectTrigger><SelectContent>{diagrams.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}・{DIAGRAM_OPTIONS.find((option) => option.value === item.kind)?.label}</SelectItem>)}</SelectContent></Select></div><DialogFooter><Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>取消</Button><Button onClick={() => void exportSelectedDiagram()} disabled={!exportDiagramId}><Download />匯出</Button></DialogFooter></DialogContent></Dialog>
 
-    <Dialog open={Boolean(renameDiagramId)} onOpenChange={(open) => { if (!open) setRenameDiagramId(""); }}><DialogContent><DialogHeader><DialogTitle>重新命名架構圖</DialogTitle></DialogHeader><div className="space-y-2 py-2"><Label htmlFor="rename-diagram">架構圖名稱</Label><Input id="rename-diagram" value={renameDiagramName} onChange={(event) => setRenameDiagramName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void renameSelectedDiagram(); }} /></div><DialogFooter><Button variant="outline" onClick={() => setRenameDiagramId("")}>取消</Button><Button onClick={() => void renameSelectedDiagram()} disabled={!renameDiagramName.trim()}>儲存</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={Boolean(renameDiagramId)} onOpenChange={(open) => { if (!open) { setRenameDiagramId(""); setEditingRootCard(false); } }}><DialogContent><DialogHeader><DialogTitle>{editingRootCard ? "編輯中心字卡" : "編輯架構圖"}</DialogTitle><DialogDescription>{editingRootCard ? "刪除只會移除中心字卡，其他節點與所有架構圖都會保留。" : "刪除只影響這張架構圖，不會刪除整個主題或其他架構圖。"}</DialogDescription></DialogHeader><div className="space-y-2 py-2"><Label htmlFor="rename-diagram">{editingRootCard ? "字卡名稱" : "架構圖名稱"}</Label><Input id="rename-diagram" value={renameDiagramName} onChange={(event) => setRenameDiagramName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void renameSelectedDiagram(); }} />{!editingRootCard && data.diagrams.find((item) => item.id === renameDiagramId)?.root_card_hidden && <Button type="button" variant="outline" size="sm" onClick={() => void restoreRootCard()}>恢復中心字卡</Button>}</div><DialogFooter className="sm:justify-between"><Button variant="destructive" onClick={() => void deleteSelectedDiagram()}><Trash2 />{editingRootCard ? "刪除字卡" : "刪除架構圖"}</Button><div className="flex gap-2"><Button variant="outline" onClick={() => { setRenameDiagramId(""); setEditingRootCard(false); }}>取消</Button><Button onClick={() => void renameSelectedDiagram()} disabled={!renameDiagramName.trim()}>儲存</Button></div></DialogFooter></DialogContent></Dialog>
 
     {!diagram ? <section className="grid min-h-[420px] place-items-center rounded-3xl border border-dashed bg-card text-center"><div><Network className="mx-auto size-8 text-muted-foreground" /><p className="mt-3 font-medium">先選擇或建立一張架構圖</p><p className="mt-1 text-sm text-muted-foreground">架構圖的內容彼此獨立，方便同一主題使用不同整理方式。</p></div></section> : diagram.kind === "mind-map" ? <section className={`overflow-hidden border bg-card shadow-sm ${isFullscreen ? "fixed-safe-screen fixed z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-sm text-muted-foreground sm:px-4"><div className="flex min-w-0 items-center gap-2"><Grip className="size-4 shrink-0" /><span>拖拽節點可改層級，Tab 新增子節點；展開後可拖曳畫布與縮放。</span></div><div className="flex shrink-0 items-center rounded-xl border bg-background/95 p-1 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 overflow-hidden border-b px-3 py-2 text-sm text-muted-foreground sm:px-4"><div className="flex min-w-0 items-center gap-2"><Grip className="size-4 shrink-0" /><span>拖拽節點可改層級，Tab 新增子節點；展開後可拖曳畫布與縮放。</span></div><div className="flex max-w-full items-center rounded-xl border bg-background/95 p-1 shadow-sm">
           <Button variant="ghost" size="icon" title="縮小" onClick={() => zoom(viewport.scale - 0.15)} disabled={!isFullscreen || viewport.scale <= MIN_SCALE}><Minus /></Button>
           <span className="w-12 text-center text-xs tabular-nums">{Math.round(viewport.scale * 100)}%</span>
           <Button variant="ghost" size="icon" title="放大" onClick={() => zoom(viewport.scale + 0.15)} disabled={!isFullscreen || viewport.scale >= MAX_SCALE}><ZoomIn /></Button>
           <Button variant="ghost" size="icon" title="回到中心" disabled={!isFullscreen} onClick={() => setViewport(centeredOnRoot(mapRef.current, viewport.scale))}><Focus /></Button>
-          <Button variant="outline" size="sm" onClick={() => void autoArrange()} disabled={!nodes.length}><RotateCcw />自動排列</Button>
-          <Button variant={mindMapRecallMode ? "default" : "ghost"} size="sm" onClick={() => { setMindMapRecallMode((current) => !current); setRevealedNodeIds(new Set()); }}><Brain />{mindMapRecallMode ? "結束回想" : "回想模式"}</Button>
-          <Button size="icon" className="bg-amber-500 text-white shadow-sm hover:bg-amber-600" title={isFullscreen ? "離開全螢幕" : "展開全螢幕"} aria-label={isFullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setIsFullscreen((current) => !current)}>{isFullscreen ? <Minimize2 /> : <Maximize2 />}</Button>
+          <Button variant="outline" size="icon" className="sm:w-auto sm:px-3" title="自動排列" aria-label="自動排列" onClick={() => void autoArrange()} disabled={!nodes.length}><RotateCcw /><span className="hidden sm:inline">自動排列</span></Button>
+          <Button size="icon" className="ml-2 bg-amber-500 text-white shadow-sm hover:bg-amber-600" title={isFullscreen ? "離開全螢幕" : "展開全螢幕"} aria-label={isFullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setIsFullscreen((current) => !current)}>{isFullscreen ? <Minimize2 /> : <Maximize2 />}</Button>
         </div></div>
       <div ref={mapRef} style={{ touchAction: isFullscreen ? "none" : "auto" }} className={`relative overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.18)_1px,_transparent_1px)] bg-[size:24px_24px] cursor-grab active:cursor-grabbing ${isFullscreen ? "min-h-0 flex-1" : "h-[68vh] min-h-[540px]"}`} onPointerDownCapture={beginTouch} onPointerDown={beginPan} onPointerMove={movePointer} onPointerUp={(event) => void endPointer(event)} onPointerCancel={(event) => void endPointer(event)}>
         {dropPreview && <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-primary/35 bg-background/95 px-4 py-2 text-sm font-semibold shadow-lg backdrop-blur">將移到「{dropPreview.label}」的{sideLabel(dropPreview.side)}側</div>}
         {!subject ? <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">先新增一個主題。</div> : <div className="pointer-events-none absolute left-0 top-0" style={{ width: WORLD_WIDTH, height: WORLD_HEIGHT, transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`, transformOrigin: "0 0" }}>
           <svg aria-hidden="true" className="pointer-events-none absolute inset-0 size-full overflow-visible" viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} shapeRendering="geometricPrecision">
             {nodes.map((node) => {
+              if (diagram.root_card_hidden && !node.parent_id) return null;
               return <path key={node.id} d={connectorPaths.get(node.id) ?? ""} fill="none" stroke={node.color ?? subject.color} strokeOpacity="0.52" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />;
             })}
           </svg>
-          <button type="button" onClick={() => router.push(`/subject?id=${encodeURIComponent(subject.id)}`)} className={`pointer-events-auto absolute flex items-center justify-center rounded-2xl border-2 bg-card px-2 py-1 text-center shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary ${dropPreview?.targetParentId === null ? "ring-4 ring-primary/35" : ""}`} style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }} aria-label={`開啟${subject.name}主題內容`}>
-            <strong className="line-clamp-2 text-2xl leading-7">{subject.name}</strong>
-          </button>
+          {!diagram.root_card_hidden && <button type="button" onClick={() => { setEditingRootCard(true); setRenameDiagramId(diagram.id); setRenameDiagramName(diagram.root_card_label ?? subject.name); }} className={`pointer-events-auto absolute flex items-center justify-center rounded-2xl border-2 bg-card px-2 py-1 text-center shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary ${dropPreview?.targetParentId === null ? "ring-4 ring-primary/35" : ""}`} style={{ left: ROOT.x, top: ROOT.y, width: ROOT.width, height: ROOT.height, borderColor: subject.color }} aria-label={`編輯${diagram.root_card_label ?? subject.name}中心字卡`}>
+            <strong className="line-clamp-2 text-2xl leading-7">{diagram.root_card_label ?? subject.name}</strong>
+          </button>}
           {quickAdd && <form onSubmit={(event) => { event.preventDefault(); void addQuickNode(); }} onPointerDown={(event) => event.stopPropagation()} className="pointer-events-auto absolute z-20 flex items-center rounded-xl border-2 border-dashed border-primary bg-card p-2 shadow-xl" style={{ left: quickAdd.x, top: quickAdd.y, width: NODE_WIDTH, height: NODE_HEIGHT }}>
             <Input ref={quickNodeInputRef} value={quickNodeName} onChange={(event) => setQuickNodeName(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setQuickAdd(null); setQuickNodeName(""); } }} aria-label={`新增${quickAdd.label}`} placeholder={quickAdd.label} className="h-10 text-base" />
           </form>}
@@ -577,11 +635,10 @@ export function OutlineView() {
               prepareQuickAdd(node, event.key === "Tab");
             }} onClick={() => {
               if (suppressNodeClickRef.current) { suppressNodeClickRef.current = false; return; }
-              if (mindMapRecallMode && !revealedNodeIds.has(node.id)) { setRevealedNodeIds((current) => new Set(current).add(node.id)); return; }
               openMindMapNode(node.id);
             }} aria-pressed={isSelected} className={`pointer-events-auto group absolute flex select-none items-center rounded-xl border bg-card px-1.5 py-1 text-left shadow-[0_7px_20px_rgb(24_32_51_/_0.09)] transition-[box-shadow,transform,background-color,border-color] hover:shadow-[0_11px_26px_rgb(24_32_51_/_0.15)] focus-visible:ring-2 focus-visible:ring-primary ${isSelected ? "z-10 bg-blue-50 shadow-[0_0_0_5px_rgb(37_99_235_/_0.35),0_11px_26px_rgb(24_32_51_/_0.16)]" : ""} ${isDropTarget ? "scale-[1.03] ring-4 ring-primary/35" : ""}`} style={{ left: position.x, top: position.y, width: NODE_WIDTH, height: NODE_HEIGHT, borderLeft: `5px solid ${color}` }}>
               {isSelected && <span aria-hidden="true" className="pointer-events-none absolute -inset-1 rounded-[0.95rem] border-[3px] border-blue-600" />}
-              <span className="line-clamp-2 w-full pr-5 text-2xl font-bold leading-7">{mindMapRecallMode && !revealedNodeIds.has(node.id) ? "？" : node.name}</span>
+              <span className="line-clamp-2 w-full pr-5 text-2xl font-bold leading-7">{node.name}</span>
               <Grip className="absolute right-1.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/35 group-hover:text-muted-foreground" />
             </button>;
           })}
@@ -598,6 +655,7 @@ function TimelineCanvas({ diagram, nodes, onUpdate }: { diagram: LocalDiagram; n
   const content = diagram.timeline_content ?? { placements: [], view_zoom: 1, view_offset_x: 0 };
   const [scale, setScale] = useState(content.view_zoom);
   const [fullscreen, setFullscreen] = useState(false);
+  const timelineWidth = Math.max(1800, ...content.placements.map((placement) => placement.position_x + 280));
   useEffect(() => {
     if (!fullscreen) return;
     const previousOverflow = document.body.style.overflow;
@@ -618,9 +676,9 @@ function TimelineCanvas({ diagram, nodes, onUpdate }: { diagram: LocalDiagram; n
   return <section className={`overflow-hidden border bg-card shadow-sm ${fullscreen ? "fixed-safe-screen fixed z-50 flex flex-col rounded-none" : "rounded-3xl"}`}>
     <header className="flex min-h-14 max-w-full items-center justify-end overflow-x-auto border-b px-2 py-2 sm:px-3"><div className="flex shrink-0 items-center rounded-xl border bg-background/95 p-1 shadow-sm"><Button variant="ghost" size="icon" title="縮小" disabled={!fullscreen} onClick={() => setScale((current) => clamp(current - 0.15, MIN_SCALE, MAX_SCALE))}><Minus /></Button><span className="w-12 text-center text-xs tabular-nums">{Math.round(scale * 100)}%</span><Button variant="ghost" size="icon" title="放大" disabled={!fullscreen} onClick={() => setScale((current) => clamp(current + 0.15, MIN_SCALE, MAX_SCALE))}><ZoomIn /></Button><Button variant="ghost" size="icon" title="重設縮放" disabled={!fullscreen} onClick={() => setScale(1)}><Focus /></Button><Button size="icon" className="ml-1 bg-amber-500 text-white hover:bg-amber-600" title={fullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={() => setFullscreen((current) => !current)}>{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button></div></header>
     <div className={`grid min-h-0 lg:grid-cols-[minmax(0,1fr)_320px] ${fullscreen ? "flex-1 grid-rows-[minmax(0,1fr)_minmax(180px,38dvh)] lg:grid-rows-1" : "min-h-[540px]"}`}>
-      <div className="relative overflow-hidden bg-[radial-gradient(circle,_rgb(100_116_139_/_0.14)_1px,_transparent_1px)] bg-[size:24px_24px]" onDragOver={(event) => { if (fullscreen) event.preventDefault(); }} onDrop={(event) => void addNode(event)} onWheel={(event) => { if (!fullscreen) return; event.preventDefault(); setScale((current) => clamp(current * Math.exp(-event.deltaY * 0.0015), MIN_SCALE, MAX_SCALE)); }}>
+      <div className={`relative bg-[radial-gradient(circle,_rgb(100_116_139_/_0.14)_1px,_transparent_1px)] bg-[size:24px_24px] ${fullscreen ? "overflow-auto" : "overflow-hidden"}`} onDragOver={(event) => { if (fullscreen) event.preventDefault(); }} onDrop={(event) => void addNode(event)} onWheel={(event) => { if (!fullscreen) return; event.preventDefault(); setScale((current) => clamp(current * Math.exp(-event.deltaY * 0.0015), MIN_SCALE, MAX_SCALE)); }}>
         {!fullscreen && <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm">展開後才能拖入節點與滾輪縮放</div>}
-        <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: 1800, height: 720 }} className="absolute left-0 top-0"><div className="absolute left-16 right-16 top-[250px] h-1 rounded-full bg-primary/25" />{content.placements.map((placement) => { const node = nodes.find((item) => item.id === placement.node_id); if (!node) return null; return <button key={placement.id} type="button" onClick={() => router.push(`/node?id=${encodeURIComponent(node.id)}`)} className="absolute w-52 rounded-xl border bg-card p-3 text-left shadow-md" style={{ left: placement.position_x, top: placement.position_y, borderLeft: `5px solid ${node.color ?? "#4f46e5"}` }}><span className="block text-xs text-muted-foreground">{placement.date_label}</span><strong className="mt-1 block truncate">{node.name}</strong></button>; })}{!content.placements.length && <div className="absolute left-1/2 top-[210px] -translate-x-1/2 text-center text-muted-foreground"><Icon className="mx-auto size-7" /><p className="mt-2 text-sm">全螢幕後，把右側節點拖到時間軸。</p></div>}</div>
+        <div style={{ width: timelineWidth * scale, height: 720 * scale }}><div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: timelineWidth, height: 720 }} className="relative"><div className="absolute left-16 right-16 top-[250px] h-1 rounded-full bg-primary/25" />{content.placements.map((placement) => { const node = nodes.find((item) => item.id === placement.node_id); if (!node) return null; return <button key={placement.id} type="button" title={placement.description} onClick={() => router.push(`/node?id=${encodeURIComponent(node.id)}`)} className="absolute w-60 rounded-xl border bg-card p-3 text-left shadow-md" style={{ left: placement.position_x, top: placement.position_y, borderLeft: `5px solid ${node.color ?? "#4f46e5"}` }}><span className="block text-xs text-muted-foreground">{placement.date_label}{placement.primary_region ? ` · ${placement.primary_region}` : ""}</span><strong className="mt-1 block line-clamp-2">{placement.title ?? node.name}</strong>{placement.description && <span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{placement.description}</span>}</button>; })}{!content.placements.length && <div className="absolute left-1/2 top-[210px] -translate-x-1/2 text-center text-muted-foreground"><Icon className="mx-auto size-7" /><p className="mt-2 text-sm">全螢幕後，把右側節點拖到時間軸。</p></div>}</div></div>
       </div>
       <aside className={`border-t bg-card p-3 lg:border-l lg:border-t-0 ${fullscreen ? "overflow-y-auto" : ""}`}><h3 className="font-semibold">內容節點</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">點擊開啟白紙；全螢幕時可拖到時間軸。</p><div className="mt-3 space-y-2">{nodes.map((node) => <button key={node.id} type="button" draggable={fullscreen} onDragStart={(event) => { event.dataTransfer.setData("application/x-learning-node-id", node.id); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => router.push(`/node?id=${encodeURIComponent(node.id)}`)} className="flex w-full items-center gap-3 rounded-xl border bg-background p-3 text-left"><span className="size-3 rounded-full" style={{ backgroundColor: node.color ?? "#4f46e5" }} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.name}</span></button>)}</div></aside>
     </div>
@@ -646,82 +704,6 @@ function collectBranchNodeIds(rootIds: string[], nodes: LocalOutlineNode[]) {
 
 function pointInRect(point: { x: number; y: number }, rect: MapRect) {
   return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
-}
-
-function arrangeMindMapNodes(
-  nodes: LocalOutlineNode[],
-  currentPosition: (node: LocalOutlineNode) => NodePosition,
-) {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const childrenByParent = new Map<string | null, LocalOutlineNode[]>();
-  for (const node of nodes) {
-    const parentId = node.parent_id && nodeById.has(node.parent_id) ? node.parent_id : null;
-    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), node]);
-  }
-
-  const branchUnitsMemo = new Map<string, number>();
-  const branchUnits = (nodeId: string, trail = new Set<string>()): number => {
-    if (branchUnitsMemo.has(nodeId)) return branchUnitsMemo.get(nodeId)!;
-    if (trail.has(nodeId)) return 1;
-    const children = childrenByParent.get(nodeId) ?? [];
-    if (!children.length) return 1;
-    const nextTrail = new Set(trail).add(nodeId);
-    const units = Math.max(1, children.reduce((sum, child) => sum + branchUnits(child.id, nextTrail), 0));
-    branchUnitsMemo.set(nodeId, units);
-    return units;
-  };
-
-  const placed = new Map<string, NodePosition>();
-  const occupied: MapRect[] = [ROOT];
-  const visited = new Set<string>();
-
-  const placeChildren = (parentId: string | null, parentRect: MapRect) => {
-    const groups = new Map<MapSide, LocalOutlineNode[]>();
-    for (const child of childrenByParent.get(parentId) ?? []) {
-      if (visited.has(child.id)) continue;
-      const current = currentPosition(child);
-      const side = child.layout_side ?? connectorDirection(parentRect, { ...current, width: NODE_WIDTH, height: NODE_HEIGHT });
-      groups.set(side, [...(groups.get(side) ?? []), child]);
-    }
-
-    for (const side of ["left", "right", "top", "bottom"] as const) {
-      const children = groups.get(side);
-      if (!children?.length) continue;
-      const vertical = side === "left" || side === "right";
-      const unitSize = vertical ? NODE_HEIGHT + VERTICAL_SIBLING_GAP : NODE_WIDTH + HORIZONTAL_SIBLING_GAP;
-      const ordered = [...children].sort((left, right) => {
-        const leftPosition = currentPosition(left);
-        const rightPosition = currentPosition(right);
-        return vertical ? leftPosition.y - rightPosition.y : leftPosition.x - rightPosition.x;
-      });
-      const spans = ordered.map((child) => Math.max(unitSize, branchUnits(child.id) * unitSize));
-      const parentCenter = rectCenter(parentRect);
-      const groupSpan = spans.reduce((sum, span) => sum + span, 0);
-      let cursor = (vertical ? parentCenter.y : parentCenter.x) - groupSpan / 2;
-
-      ordered.forEach((child, index) => {
-        const crossCenter = cursor + spans[index] / 2;
-        cursor += spans[index];
-        const desired = childRectFromParent(parentRect, side, crossCenter);
-        const childRect = placeRectWithoutCollision(desired, parentRect, side, occupied);
-        const position = { x: Math.round(childRect.x), y: Math.round(childRect.y) };
-        placed.set(child.id, position);
-        occupied.push(childRect);
-        visited.add(child.id);
-        placeChildren(child.id, childRect);
-      });
-    }
-  };
-
-  placeChildren(null, ROOT);
-  return nodes.map((node) => {
-    const position = placed.get(node.id) ?? currentPosition(node);
-    return {
-      id: node.id,
-      position_x: Math.round(clamp(position.x, -POSITION_LIMIT, POSITION_LIMIT)),
-      position_y: Math.round(clamp(position.y, -POSITION_LIMIT, POSITION_LIMIT)),
-    };
-  });
 }
 
 function nearestRectSide(point: { x: number; y: number }, rect: MapRect): MapSide {

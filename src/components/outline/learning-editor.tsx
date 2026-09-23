@@ -39,7 +39,7 @@ import {
 } from "lexical";
 import imageCompression from "browser-image-compression";
 import { $generateNodesFromDOM } from "@lexical/html";
-import { LinkNode, TOGGLE_LINK_COMMAND } from "@lexical/link";
+import { $isLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from "@lexical/link";
 import { INSERT_CHECK_LIST_COMMAND, INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND, ListItemNode, ListNode } from "@lexical/list";
 import { $isMarkNode, $unwrapMarkNode, $wrapSelectionInMarkNode, MarkNode } from "@lexical/mark";
 import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from "@lexical/selection";
@@ -275,6 +275,7 @@ function LearningEditorBody({ initialAnnotations, placeholder, footer, editable,
   const annotationSelectionRef = useRef<RangeSelection | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkType, setLinkType] = useState<"internal" | "external">("internal");
+  const [editingLinkHref, setEditingLinkHref] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
   const [internalTarget, setInternalTarget] = useState("");
   const [linkError, setLinkError] = useState("");
@@ -602,13 +603,26 @@ function LearningEditorBody({ initialAnnotations, placeholder, footer, editable,
       if (!$isRangeSelection(selection) || selection.isCollapsed()) {
         linkSelectionRef.current = null;
         setSelectedQuote("");
+        setEditingLinkHref("");
       } else {
         linkSelectionRef.current = selection.clone();
         setSelectedQuote(selection.getTextContent().trim());
+        const currentHref = getSelectionLinkHref(selection);
+        setEditingLinkHref(currentHref);
+        if (currentHref.startsWith("/")) {
+          const target = linkTargets.find((item) => sameInternalLearningTarget(item.href, currentHref));
+          setLinkType("internal");
+          setInternalTarget(target?.value ?? "");
+        } else if (currentHref) {
+          setLinkType("external");
+          setExternalUrl(currentHref);
+        }
       }
-      setLinkType(linkTargets.length ? "internal" : "external");
-      setInternalTarget(linkTargets[0]?.value ?? "");
-      setExternalUrl("");
+      if (!$isRangeSelection(selection) || selection.isCollapsed() || !getSelectionLinkHref(selection)) {
+        setLinkType(linkTargets.length ? "internal" : "external");
+        setInternalTarget(linkTargets[0]?.value ?? "");
+        setExternalUrl("");
+      }
       setLinkError("");
       setLinkDialogOpen(true);
     });
@@ -632,6 +646,16 @@ function LearningEditorBody({ initialAnnotations, placeholder, footer, editable,
     editor.update(() => $setSelection(linkSelectionRef.current?.clone() ?? null));
     editor.dispatchCommand(TOGGLE_LINK_COMMAND, href);
     setLinkDialogOpen(false);
+    setEditingLinkHref("");
+    setSelectionToolbar(null);
+  }
+
+  function removeLink() {
+    if (!linkSelectionRef.current || !editingLinkHref) return;
+    editor.update(() => $setSelection(linkSelectionRef.current?.clone() ?? null));
+    editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
+    setLinkDialogOpen(false);
+    setEditingLinkHref("");
     setSelectionToolbar(null);
   }
 
@@ -803,13 +827,13 @@ function LearningEditorBody({ initialAnnotations, placeholder, footer, editable,
     </Dialog>
     <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
       <DialogContent>
-        <DialogHeader><DialogTitle>連接知識</DialogTitle><DialogDescription>{selectedQuote ? `為「${selectedQuote.slice(0, 80)}${selectedQuote.length > 80 ? "…" : ""}」建立連接。` : "請先在白紙中選取文字，再按「連接」。"}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{editingLinkHref ? "編輯連接" : "連接知識"}</DialogTitle><DialogDescription>{selectedQuote ? `為「${selectedQuote.slice(0, 80)}${selectedQuote.length > 80 ? "…" : ""}」${editingLinkHref ? "修改或刪除連接" : "建立連接"}。` : "請先在白紙中選取文字，再按「連接」。"}</DialogDescription></DialogHeader>
         {selectedQuote && <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-2"><Button type="button" variant={linkType === "internal" ? "default" : "outline"} onClick={() => { setLinkType("internal"); setLinkError(""); }} disabled={!linkTargets.length}>內部連接</Button><Button type="button" variant={linkType === "external" ? "default" : "outline"} onClick={() => { setLinkType("external"); setLinkError(""); }}>外部連接</Button></div>
           {linkType === "internal" ? <div className="space-y-2"><p className="text-sm font-medium">連到其他主題或節點</p><SearchableParentSelect value={internalTarget} onChange={(value) => { setInternalTarget(value); setLinkError(""); }} options={linkTargets} placeholder="搜尋主題或節點" /></div> : <div className="space-y-2"><p className="text-sm font-medium">外部網址</p><Input type="url" value={externalUrl} onChange={(event) => { setExternalUrl(event.target.value); setLinkError(""); }} placeholder="https://…" autoFocus /></div>}
           {linkError && <p className="text-sm text-destructive">{linkError}</p>}
         </div>}
-        <DialogFooter><Button variant="outline" onClick={() => setLinkDialogOpen(false)}>取消</Button><Button onClick={createLink} disabled={!selectedQuote}>建立連接</Button></DialogFooter>
+        <DialogFooter className="sm:justify-between">{editingLinkHref && <Button variant="destructive" className="mr-auto" onClick={removeLink}><Trash2 />刪除連接</Button>}<div className="flex gap-2"><Button variant="outline" onClick={() => setLinkDialogOpen(false)}>取消</Button><Button onClick={createLink} disabled={!selectedQuote}>{editingLinkHref ? "更新連接" : "建立連接"}</Button></div></DialogFooter>
       </DialogContent>
     </Dialog>
     <Dialog open={selectionSettingsOpen} onOpenChange={setSelectionSettingsOpen}>
@@ -1685,6 +1709,32 @@ function isSafeEditorHref(href: string) {
   if (trimmed.startsWith("/") || trimmed.startsWith("#")) return true;
   try {
     return ["http:", "https:", "mailto:", "tel:"].includes(new URL(trimmed).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function getSelectionLinkHref(selection: RangeSelection) {
+  const hrefs = new Set<string>();
+  for (const selectedNode of selection.getNodes()) {
+    let current: LexicalNode | null = selectedNode;
+    while (current) {
+      if ($isLinkNode(current)) {
+        hrefs.add(current.getURL());
+        break;
+      }
+      current = current.getParent();
+    }
+  }
+  return hrefs.size === 1 ? [...hrefs][0] : "";
+}
+
+function sameInternalLearningTarget(left: string, right: string) {
+  if (!left.startsWith("/") || !right.startsWith("/")) return false;
+  try {
+    const leftUrl = new URL(left, window.location.origin);
+    const rightUrl = new URL(right, window.location.origin);
+    return leftUrl.pathname === rightUrl.pathname && leftUrl.searchParams.get("id") === rightUrl.searchParams.get("id");
   } catch {
     return false;
   }

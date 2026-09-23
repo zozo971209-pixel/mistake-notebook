@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Eye, EyeOff, FileText, Focus, Layers3, LockKeyhole, Maximize2, Minimize2, Minus, Search, ZoomIn } from "lucide-react";
+import { Eye, EyeOff, FileText, Focus, Layers3, LockKeyhole, Maximize2, Minimize2, Minus, Search, ZoomIn } from "lucide-react";
 import type { LocalDiagram, LocalMapDocument, LocalMapFeature, LocalMapLayer, LocalOutlineNode } from "@/lib/local-data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,14 +26,14 @@ export function MapCanvas({ diagram, nodes, onUpdate }: { diagram: LocalDiagram;
   const [saveError, setSaveError] = useState("");
   const [baseFeatures, setBaseFeatures] = useState<BaseFeature[]>([]);
   const [showEmptyNotice, setShowEmptyNotice] = useState(!content?.features.length);
-  const [recallMode, setRecallMode] = useState(false);
-  const [revealedFeatureIds, setRevealedFeatureIds] = useState<Set<string>>(() => new Set());
+  const [selectedFeatureId, setSelectedFeatureId] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
   const dragRef = useRef<Drag | null>(null);
   const viewRef = useRef(view);
 
   const visibleLayerIds = useMemo(() => new Set(content?.layers.filter((layer) => content.presentation.layer_visibility[layer.layer_id] ?? layer.visible).map((layer) => layer.layer_id) ?? []), [content]);
   const visibleFeatures = useMemo(() => content?.features.filter((feature) => visibleLayerIds.has(feature.layer_id) && feature.geometry) ?? [], [content, visibleLayerIds]);
+  const hasGeographicFeatures = useMemo(() => visibleFeatures.some((feature) => feature.coordinate_space !== "schematic"), [visibleFeatures]);
   const filteredLayers = useMemo(() => { const normalized = query.trim().toLocaleLowerCase("zh-TW"); return content?.layers.filter((layer) => !normalized || `${layer.layer_name} ${layer.semantic_type} ${layer.legend_group ?? ""}`.toLocaleLowerCase("zh-TW").includes(normalized)) ?? []; }, [content, query]);
 
   useEffect(() => {
@@ -89,38 +89,39 @@ export function MapCanvas({ diagram, nodes, onUpdate }: { diagram: LocalDiagram;
     void persist({ ...mapContent, layers: hasLayer ? mapContent.layers : [...mapContent.layers, layer], features: [...mapContent.features, feature], presentation: { ...mapContent.presentation, layer_visibility: { ...mapContent.presentation.layer_visibility, [LINKED_NODE_LAYER_ID]: true } } });
   }
 
-  function openFeature(feature: LocalMapFeature) { if (recallMode && !revealedFeatureIds.has(feature.feature_id)) return setRevealedFeatureIds((current) => new Set(current).add(feature.feature_id)); if (typeof feature.linked_node_id === "string") router.push(`/node?id=${encodeURIComponent(feature.linked_node_id)}`); }
+  function openFeature(feature: LocalMapFeature) { setSelectedFeatureId(feature.feature_id); if (typeof feature.linked_node_id === "string") router.push(`/node?id=${encodeURIComponent(feature.linked_node_id)}`); }
   const centerPoint = project(view.center);
   const transform = `translate(${MAP_WIDTH / 2} ${MAP_HEIGHT / 2}) scale(${view.zoom}) translate(${-centerPoint.x} ${-centerPoint.y})`;
 
   return <section className={`overflow-hidden border bg-card shadow-sm ${fullscreen ? "fixed-safe-screen fixed z-[70] flex flex-col rounded-none" : "rounded-3xl"}`}>
-    <header className="flex min-h-14 max-w-full items-center justify-end overflow-x-auto border-b px-2 py-2 sm:px-3"><CanvasToolbar fullscreen={fullscreen} zoom={view.zoom} recallMode={recallMode} recallDisabled={!content.features.length} onZoom={(zoom) => commitView({ ...view, zoom })} onReset={() => commitView({ center: [0, 0], zoom: 1 })} onRecall={() => { setRecallMode((current) => !current); setRevealedFeatureIds(new Set()); }} onFullscreen={() => setFullscreen((current) => !current)} /></header>
+    <header className="flex min-h-14 max-w-full items-center justify-end overflow-x-auto border-b px-2 py-2 sm:px-3"><CanvasToolbar fullscreen={fullscreen} zoom={view.zoom} onZoom={(zoom) => commitView({ ...view, zoom })} onReset={() => commitView({ center: [0, 0], zoom: 1 })} onFullscreen={() => setFullscreen((current) => !current)} /></header>
     <div className={`grid min-h-0 lg:grid-cols-[minmax(0,1fr)_320px] ${fullscreen ? "flex-1 grid-rows-[minmax(0,1fr)_minmax(180px,38dvh)] lg:grid-rows-1" : "min-h-[620px]"}`}>
       <div className={`relative overflow-hidden bg-[#f8fafc] ${fullscreen ? "min-h-0" : "min-h-[520px]"}`} onDragOver={(event) => { if (fullscreen) event.preventDefault(); }} onDrop={addNodeToMap}>
         {!fullscreen && <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm">展開後才能拖曳與滾輪縮放</div>}
         <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className={`absolute inset-0 size-full ${fullscreen ? "touch-none cursor-grab active:cursor-grabbing" : "touch-auto cursor-default"}`} onPointerDown={beginPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} onWheel={(event) => { if (!fullscreen) return; event.preventDefault(); commitView({ ...view, zoom: clamp(view.zoom * Math.exp(-event.deltaY * 0.0015), MIN_ZOOM, MAX_ZOOM) }); }}>
           <defs><marker id="map-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs><rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#f8fafc" />
-          <g transform={transform}><BaseMap features={baseFeatures} /><Graticule />{[...content.layers].sort((a, b) => a.order - b.order).flatMap((layer) => { if (!visibleLayerIds.has(layer.layer_id)) return []; const opacity = content.presentation.layer_opacity[layer.layer_id] ?? layer.opacity; return visibleFeatures.filter((feature) => feature.layer_id === layer.layer_id).map((feature) => <FeatureShape key={feature.feature_id} feature={feature} layer={layer} opacity={opacity} hiddenLabel={recallMode && !revealedFeatureIds.has(feature.feature_id)} onOpen={() => openFeature(feature)} />); })}</g>
+          <g transform={transform}>{hasGeographicFeatures && <><BaseMap features={baseFeatures} /><Graticule /></>}{[...content.layers].sort((a, b) => a.order - b.order).flatMap((layer) => { if (!visibleLayerIds.has(layer.layer_id)) return []; const opacity = content.presentation.layer_opacity[layer.layer_id] ?? layer.opacity; return visibleFeatures.filter((feature) => feature.layer_id === layer.layer_id).sort((left, right) => Number(left.geometry_type !== "SchematicEdge") - Number(right.geometry_type !== "SchematicEdge")).map((feature) => <FeatureShape key={feature.feature_id} feature={feature} features={visibleFeatures} layer={layer} opacity={opacity} onOpen={() => openFeature(feature)} />); })}</g>
         </svg>
         {!content.features.length && showEmptyNotice && <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 rounded-xl border bg-background/95 px-4 py-3 text-center text-sm shadow-lg"><p className="font-medium">已顯示中性世界底圖</p><p className="mt-1 text-xs text-muted-foreground">匯入檔未提供地理要素座標，因此沒有氣候分布內容。</p></div>}<span className="pointer-events-none absolute bottom-2 right-3 text-[10px] text-slate-500">Base map: Natural Earth 1:110m</span>
       </div>
-      <MapSidePanel fullscreen={fullscreen} nodes={subjectNodes} layers={filteredLayers} content={content} query={query} onQuery={setQuery} onLayerVisible={setLayerVisible} onLayerOpacity={setLayerOpacity} onOpenNode={(id) => router.push(`/node?id=${encodeURIComponent(id)}`)} />
+      <MapSidePanel fullscreen={fullscreen} nodes={subjectNodes} layers={filteredLayers} content={content} selectedFeature={content.features.find((feature) => feature.feature_id === selectedFeatureId)} query={query} onQuery={setQuery} onLayerVisible={setLayerVisible} onLayerOpacity={setLayerOpacity} onOpenNode={(id) => router.push(`/node?id=${encodeURIComponent(id)}`)} />
     </div>
     {saveError && <p className="absolute bottom-3 left-3 z-20 rounded-lg bg-destructive px-3 py-2 text-xs text-white">{saveError}</p>}
   </section>;
 }
 
-function CanvasToolbar({ fullscreen, zoom, recallMode, recallDisabled, onZoom, onReset, onRecall, onFullscreen }: { fullscreen: boolean; zoom: number; recallMode: boolean; recallDisabled: boolean; onZoom: (zoom: number) => void; onReset: () => void; onRecall: () => void; onFullscreen: () => void }) {
-  return <div className="flex items-center rounded-xl border bg-background/95 p-1 shadow-sm"><Button variant="ghost" size="icon" title="縮小" disabled={!fullscreen} onClick={() => onZoom(clamp(zoom / 1.25, MIN_ZOOM, MAX_ZOOM))}><Minus /></Button><span className="w-12 text-center text-xs tabular-nums">{Math.round(zoom * 100)}%</span><Button variant="ghost" size="icon" title="放大" disabled={!fullscreen} onClick={() => onZoom(clamp(zoom * 1.25, MIN_ZOOM, MAX_ZOOM))}><ZoomIn /></Button><Button variant="ghost" size="icon" title="回到世界全圖" disabled={!fullscreen} onClick={onReset}><Focus /></Button><Button variant={recallMode ? "default" : "ghost"} size="sm" disabled={recallDisabled} onClick={onRecall}><Brain />{recallMode ? "結束回想" : "回想模式"}</Button><Button size="icon" className="ml-1 bg-amber-500 text-white shadow-sm hover:bg-amber-600" title={fullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={onFullscreen}>{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button></div>;
+function CanvasToolbar({ fullscreen, zoom, onZoom, onReset, onFullscreen }: { fullscreen: boolean; zoom: number; onZoom: (zoom: number) => void; onReset: () => void; onFullscreen: () => void }) {
+  return <div className="flex items-center rounded-xl border bg-background/95 p-1 shadow-sm"><Button variant="ghost" size="icon" title="縮小" disabled={!fullscreen} onClick={() => onZoom(clamp(zoom / 1.25, MIN_ZOOM, MAX_ZOOM))}><Minus /></Button><span className="w-12 text-center text-xs tabular-nums">{Math.round(zoom * 100)}%</span><Button variant="ghost" size="icon" title="放大" disabled={!fullscreen} onClick={() => onZoom(clamp(zoom * 1.25, MIN_ZOOM, MAX_ZOOM))}><ZoomIn /></Button><Button variant="ghost" size="icon" title="回到全圖" disabled={!fullscreen} onClick={onReset}><Focus /></Button><Button size="icon" className="ml-1 bg-amber-500 text-white shadow-sm hover:bg-amber-600" title={fullscreen ? "離開全螢幕" : "展開全螢幕"} onClick={onFullscreen}>{fullscreen ? <Minimize2 /> : <Maximize2 />}</Button></div>;
 }
 
-function MapSidePanel({ fullscreen, nodes, layers, content, query, onQuery, onLayerVisible, onLayerOpacity, onOpenNode }: { fullscreen: boolean; nodes: LocalOutlineNode[]; layers: LocalMapLayer[]; content: LocalMapDocument; query: string; onQuery: (value: string) => void; onLayerVisible: (layer: LocalMapLayer, visible: boolean) => void; onLayerOpacity: (layer: LocalMapLayer, opacity: number) => void; onOpenNode: (id: string) => void }) {
-  return <aside className={`border-t bg-card p-3 lg:border-l lg:border-t-0 ${fullscreen ? "overflow-y-auto" : ""}`}><Tabs defaultValue="content"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="content">內容</TabsTrigger><TabsTrigger value="layers">圖層</TabsTrigger></TabsList><TabsContent value="content" className="space-y-2 pt-3"><p className="px-1 text-xs leading-5 text-muted-foreground">點擊開啟節點白紙；全螢幕時可拖到地圖建立位置標記。</p>{nodes.map((node) => <button key={node.id} type="button" draggable={fullscreen} onDragStart={(event) => { event.dataTransfer.setData("application/x-learning-node-id", node.id); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => onOpenNode(node.id)} className="flex w-full items-center gap-3 rounded-xl border bg-background p-3 text-left transition hover:border-primary/40"><span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: node.color ?? "#4f46e5" }} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.name}</span><FileText className="size-4 text-muted-foreground" /></button>)}{!nodes.length && <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">這個主題尚未建立心智圖節點。</p>}</TabsContent><TabsContent value="layers" className="pt-3"><div className="flex items-center gap-2 font-semibold"><Layers3 className="size-4" />圖層</div><div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => onQuery(event.target.value)} className="pl-9" placeholder="搜尋圖層" /></div><div className="mt-3 space-y-2">{layers.map((layer) => { const visible = content.presentation.layer_visibility[layer.layer_id] ?? layer.visible; const opacity = content.presentation.layer_opacity[layer.layer_id] ?? layer.opacity; return <div key={layer.layer_id} className="rounded-xl border bg-background p-3"><div className="flex items-start gap-2"><button type="button" className="mt-0.5 text-primary" aria-label={visible ? `隱藏${layer.layer_name}` : `顯示${layer.layer_name}`} onClick={() => onLayerVisible(layer, !visible)}>{visible ? <Eye className="size-4" /> : <EyeOff className="size-4 text-muted-foreground" />}</button><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{layer.layer_name}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{layer.geometry_family}</p></div>{layer.locked && <LockKeyhole className="size-3.5 text-muted-foreground" aria-label="已鎖定" />}</div><label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><span>透明度</span><input className="min-w-0 flex-1 accent-primary" type="range" min="0" max="1" step="0.05" value={opacity} onChange={(event) => onLayerOpacity(layer, Number(event.target.value))} /><span className="w-8 text-right tabular-nums">{Math.round(opacity * 100)}%</span></label></div>; })}{!layers.length && <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">找不到圖層。</p>}</div></TabsContent></Tabs></aside>;
+function MapSidePanel({ fullscreen, nodes, layers, content, selectedFeature, query, onQuery, onLayerVisible, onLayerOpacity, onOpenNode }: { fullscreen: boolean; nodes: LocalOutlineNode[]; layers: LocalMapLayer[]; content: LocalMapDocument; selectedFeature?: LocalMapFeature; query: string; onQuery: (value: string) => void; onLayerVisible: (layer: LocalMapLayer, visible: boolean) => void; onLayerOpacity: (layer: LocalMapLayer, opacity: number) => void; onOpenNode: (id: string) => void }) {
+  const detail = selectedFeature ? [selectedFeature.tooltip_text, selectedFeature.description, selectedFeature.precision_note, selectedFeature.source_note].find((value) => typeof value === "string" && value.trim()) as string | undefined : undefined;
+  return <aside className={`border-t bg-card p-3 lg:border-l lg:border-t-0 ${fullscreen ? "overflow-y-auto" : ""}`}><Tabs defaultValue="content"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="content">內容</TabsTrigger><TabsTrigger value="layers">圖層</TabsTrigger></TabsList><TabsContent value="content" className="space-y-2 pt-3">{selectedFeature && <div className="rounded-xl border border-primary/30 bg-primary/[0.04] p-3"><p className="text-xs font-medium text-primary">目前選取</p><h3 className="mt-1 font-semibold">{selectedFeature.label}</h3>{detail && <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p>}<p className="mt-2 text-[11px] text-muted-foreground">核對狀態：{selectedFeature.verification_state}</p></div>}<p className="px-1 text-xs leading-5 text-muted-foreground">點擊開啟節點白紙；全螢幕時可拖到地圖建立位置標記。</p>{nodes.map((node) => <button key={node.id} type="button" draggable={fullscreen} onDragStart={(event) => { event.dataTransfer.setData("application/x-learning-node-id", node.id); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => onOpenNode(node.id)} className="flex w-full items-center gap-3 rounded-xl border bg-background p-3 text-left transition hover:border-primary/40"><span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: node.color ?? "#4f46e5" }} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{node.name}</span><FileText className="size-4 text-muted-foreground" /></button>)}{!nodes.length && <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">這個主題尚未建立心智圖節點。</p>}</TabsContent><TabsContent value="layers" className="pt-3"><div className="flex items-center gap-2 font-semibold"><Layers3 className="size-4" />圖層</div><div className="relative mt-3"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => onQuery(event.target.value)} className="pl-9" placeholder="搜尋圖層" /></div><div className="mt-3 space-y-2">{layers.map((layer) => { const visible = content.presentation.layer_visibility[layer.layer_id] ?? layer.visible; const opacity = content.presentation.layer_opacity[layer.layer_id] ?? layer.opacity; return <div key={layer.layer_id} className="rounded-xl border bg-background p-3"><div className="flex items-start gap-2"><button type="button" className="mt-0.5 text-primary" aria-label={visible ? `隱藏${layer.layer_name}` : `顯示${layer.layer_name}`} onClick={() => onLayerVisible(layer, !visible)}>{visible ? <Eye className="size-4" /> : <EyeOff className="size-4 text-muted-foreground" />}</button><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{layer.layer_name}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{layer.geometry_family}</p></div>{layer.locked && <LockKeyhole className="size-3.5 text-muted-foreground" aria-label="已鎖定" />}</div><label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground"><span>透明度</span><input className="min-w-0 flex-1 accent-primary" type="range" min="0" max="1" step="0.05" value={opacity} onChange={(event) => onLayerOpacity(layer, Number(event.target.value))} /><span className="w-8 text-right tabular-nums">{Math.round(opacity * 100)}%</span></label></div>; })}{!layers.length && <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">找不到圖層。</p>}</div></TabsContent></Tabs></aside>;
 }
 
 function Graticule() { const longitudes = Array.from({ length: 13 }, (_, index) => -180 + index * 30); const latitudes = Array.from({ length: 7 }, (_, index) => -90 + index * 30); return <g aria-hidden="true">{longitudes.map((longitude) => { const point = project([longitude, 0]); return <line key={`lon-${longitude}`} x1={point.x} x2={point.x} y1="0" y2={MAP_HEIGHT} stroke="#cbd5e1" strokeWidth="1" vectorEffect="non-scaling-stroke" />; })}{latitudes.map((latitude) => { const point = project([0, latitude]); return <line key={`lat-${latitude}`} x1="0" x2={MAP_WIDTH} y1={point.y} y2={point.y} stroke="#cbd5e1" strokeWidth="1" vectorEffect="non-scaling-stroke" />; })}<rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="none" stroke="#94a3b8" strokeWidth="1.5" vectorEffect="non-scaling-stroke" /></g>; }
 function BaseMap({ features }: { features: BaseFeature[] }) { return <g aria-hidden="true">{features.map((feature, index) => { const { type, coordinates } = feature.geometry; if (type === "Polygon" && isPolygon(coordinates)) return <path key={index} d={polygonPath(coordinates)} fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />; if (type === "MultiPolygon" && Array.isArray(coordinates)) return <g key={index}>{coordinates.filter(isPolygon).map((polygon, polygonIndex) => <path key={polygonIndex} d={polygonPath(polygon)} fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />)}</g>; return null; })}</g>; }
-function FeatureShape({ feature, layer, opacity, hiddenLabel, onOpen }: { feature: LocalMapFeature; layer: LocalMapLayer; opacity: number; hiddenLabel: boolean; onOpen: () => void }) {
+function FeatureShape({ feature, features, layer, opacity, onOpen }: { feature: LocalMapFeature; features: LocalMapFeature[]; layer: LocalMapLayer; opacity: number; onOpen: () => void }) {
   const geometry = feature.geometry;
   if (!geometry) return null;
   const type = typeof geometry.type === "string" ? geometry.type : feature.geometry_type;
@@ -128,9 +129,27 @@ function FeatureShape({ feature, layer, opacity, hiddenLabel, onOpen }: { featur
   const color = semanticColor(layer.semantic_type);
   const open = (event: React.MouseEvent) => { event.stopPropagation(); onOpen(); };
   const common = { "data-map-feature": "", onClick: open, opacity, stroke: color, strokeWidth: 2.4, vectorEffect: "non-scaling-stroke" as const };
+  if (type === "SchematicEdge") {
+    const fromId = typeof feature.from_feature_id === "string" ? feature.from_feature_id : "";
+    const toId = typeof feature.to_feature_id === "string" ? feature.to_feature_id : "";
+    const from = schematicPoint(features.find((item) => item.feature_id === fromId));
+    const to = schematicPoint(features.find((item) => item.feature_id === toId));
+    if (!from || !to) return null;
+    return <line {...common} x1={from.x} y1={from.y} x2={to.x} y2={to.y} fill="none" markerEnd={feature.directed === true ? "url(#map-arrow)" : undefined} />;
+  }
+  if (type === "SchematicPoint") {
+    const point = schematicPoint(feature);
+    if (!point) return null;
+    const labelWidth = clamp(34 + [...feature.label].length * 15, 100, 260);
+    return <g data-map-feature="" onClick={open} className="cursor-pointer" opacity={opacity} transform={`translate(${point.x - labelWidth / 2} ${point.y - 24})`}>
+      <rect width={labelWidth} height="48" rx="13" fill="white" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      <rect width="6" height="48" rx="3" fill={color} />
+      <text x="18" y="30" fontSize="15" fontWeight="700" fill="#172033">{feature.label}</text>
+    </g>;
+  }
   if (type === "Point" && isPosition(coordinates)) {
     const point = project(coordinates);
-    const label = hiddenLabel ? "？" : feature.label;
+    const label = feature.label;
     const isNode = typeof feature.linked_node_id === "string";
     const labelWidth = clamp(28 + [...label].length * 15, 54, 230);
     return <g data-map-feature="" onClick={open} className="cursor-pointer">
@@ -148,6 +167,15 @@ function FeatureShape({ feature, layer, opacity, hiddenLabel, onOpen }: { featur
   if (type === "Polygon" && isPolygon(coordinates)) return <path {...common} d={polygonPath(coordinates)} fill={color} fillOpacity="0.24" />;
   if (type === "MultiPolygon" && Array.isArray(coordinates)) return <g>{coordinates.filter(isPolygon).map((polygon, index) => <path key={index} {...common} d={polygonPath(polygon)} fill={color} fillOpacity="0.24" />)}</g>;
   return null;
+}
+function schematicPoint(feature?: LocalMapFeature) {
+  if (!feature?.geometry || feature.geometry.type !== "SchematicPoint") return null;
+  const position = feature.geometry.position;
+  if (!position || typeof position !== "object" || Array.isArray(position)) return null;
+  const x = Number((position as Record<string, unknown>).x);
+  const y = Number((position as Record<string, unknown>).y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x: x * MAP_WIDTH, y: y * MAP_HEIGHT };
 }
 function semanticColor(type: string) { const colors: Record<string, string> = { climate: "#0f766e", current: "#2563eb", wind: "#7c3aed", agriculture: "#b45309", crop: "#16a34a", livestock: "#be123c", world_system: "#475569", other: "#ea580c" }; return colors[type] ?? "#4f46e5"; }
 function project(position: [number, number] | number[]) { return { x: (Number(position[0]) + 180) / 360 * MAP_WIDTH, y: (90 - Number(position[1])) / 180 * MAP_HEIGHT }; }

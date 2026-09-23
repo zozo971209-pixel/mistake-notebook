@@ -265,7 +265,7 @@ export function parseBackup(value: unknown): LearningMapBackup {
   if (nodes.some((node) => node.knowledge_card_id && !knowledgeCardIds.has(node.knowledge_card_id))) throw new Error("備份包含找不到共用知識卡的節點。");
   if (questions.some((question) => question.subject_id && !subjectIds.has(question.subject_id))) throw new Error("備份包含找不到主題的錯題。");
   if (reviews.some((review) => !questionIds.has(review.question_id))) throw new Error("備份包含找不到題目的複習紀錄。");
-  if (!hasIds(trash) || trash.some((item) => !["subject", "node", "question"].includes(item.entity_type) || !isObject(item.payload))) {
+  if (!hasIds(trash) || trash.some((item) => !["subject", "diagram", "node", "question"].includes(item.entity_type) || !isObject(item.payload))) {
     throw new Error("備份包含無效的資源回收桶資料。");
   }
   questions.forEach((question) => { question.answer_config ||= emptyAnswerConfig; });

@@ -48,10 +48,11 @@ type LocalDataContextValue = LocalSnapshot & {
   updateSubject: (id: string, changes: Partial<Pick<LocalSubject, "name" | "color" | "content" | "resources" | "sort_order">>) => Promise<void>;
   deleteSubject: (id: string) => Promise<void>;
   createDiagram: (subjectId: string, name: string, kind: DiagramKind) => Promise<string>;
+  deleteDiagram: (id: string) => Promise<void>;
   exportDiagram: (diagramId: string) => LearningDiagramExport;
   importDiagram: (subjectId: string, value: unknown) => Promise<{ id: string; name: string; kind: DiagramKind; nodes: number; cards: number }>;
   importMapSpec: (subjectId: string, value: unknown) => Promise<{ created: number; updated: number; layers: number; features: number; annotations: number }>;
-  updateDiagram: (id: string, changes: Partial<Pick<LocalDiagram, "name" | "sort_order" | "map_content" | "timeline_content">>) => Promise<void>;
+  updateDiagram: (id: string, changes: Partial<Pick<LocalDiagram, "name" | "root_card_label" | "root_card_hidden" | "sort_order" | "map_content" | "timeline_content">>) => Promise<void>;
   createNode: (subjectId: string, diagramId: string, name: string, parentId?: string | null, color?: string | null, position?: { x: number; y: number }, layoutSide?: OutlineSide, layoutSideLocked?: boolean) => Promise<string>;
   updateNode: (id: string, changes: Partial<Pick<LocalOutlineNode, "name" | "color" | "content" | "parent_id" | "layout_side" | "layout_side_locked" | "position_x" | "position_y" | "resources" | "sort_order" | "knowledge_card_id">>) => Promise<void>;
   updateNodes: (items: Array<{ id: string; position_x: number; position_y: number; layout_side?: OutlineSide; layout_side_locked?: boolean }>) => Promise<void>;
@@ -226,6 +227,20 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     return diagram.id;
   }, [refresh, snapshot.diagrams, snapshot.subjects]);
 
+  const deleteDiagram = useCallback(async (id: string) => {
+    const diagram = snapshot.diagrams.find((item) => item.id === id);
+    if (!diagram) return;
+    const nodes = snapshot.nodes.filter((item) => item.diagram_id === id);
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const questionLinks = snapshot.questions.filter((item) => item.node_id && nodeIds.has(item.node_id)).map((item) => ({ id: item.id, subject_id: item.subject_id, node_id: item.node_id, chapter: item.chapter }));
+    const trashItem: LocalTrashItem = { id: crypto.randomUUID(), entity_type: "diagram", title: diagram.name, deleted_at: now(), payload: { diagram, nodes, questionLinks } };
+    await putLocal("trash", trashItem);
+    await deleteLocal("diagrams", id);
+    for (const node of nodes) await deleteLocal("nodes", node.id);
+    for (const question of snapshot.questions.filter((item) => item.node_id && nodeIds.has(item.node_id))) await putLocal("questions", { ...question, node_id: null, chapter: null, updated_at: now() });
+    await refresh();
+  }, [refresh, snapshot.diagrams, snapshot.nodes, snapshot.questions]);
+
   const exportDiagram = useCallback((diagramId: string) => {
     const diagram = snapshot.diagrams.find((item) => item.id === diagramId);
     if (!diagram) throw new Error("找不到要匯出的架構圖。");
@@ -327,7 +342,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     return { created, updated, layers: parsed.totals.layers, features: parsed.totals.features, annotations: parsed.totals.annotations };
   }, [refresh, snapshot.diagrams, snapshot.subjects]);
 
-  const updateDiagram = useCallback(async (id: string, changes: Partial<Pick<LocalDiagram, "name" | "sort_order" | "map_content" | "timeline_content">>) => {
+  const updateDiagram = useCallback(async (id: string, changes: Partial<Pick<LocalDiagram, "name" | "root_card_label" | "root_card_hidden" | "sort_order" | "map_content" | "timeline_content">>) => {
     const current = snapshot.diagrams.find((diagram) => diagram.id === id);
     if (!current) throw new Error("找不到這張架構圖。");
     const updated = { ...current, ...changes, updated_at: now() };
@@ -404,6 +419,11 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       await putManyLocal("knowledge_cards", item.payload.knowledgeCards ?? []);
       await putManyLocal("nodes", item.payload.nodes ?? []);
     }
+    if (item.entity_type === "diagram" && item.payload.diagram) {
+      if (!snapshot.subjects.some((subject) => subject.id === item.payload.diagram?.subject_id)) throw new Error("原本主題尚未還原，請先還原主題。");
+      await putLocal("diagrams", item.payload.diagram);
+      await putManyLocal("nodes", item.payload.nodes ?? []);
+    }
     if (item.entity_type === "node" && item.payload.node) {
       if (!snapshot.subjects.some((subject) => subject.id === item.payload.node?.subject_id)) throw new Error("原本主題尚未還原，請先還原主題。");
       await putLocal("nodes", item.payload.node);
@@ -477,7 +497,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     setSnapshot((state) => ({ ...state, knowledge_cards: state.knowledge_cards.map((card) => card.id === id ? updated : card) }));
   }, [snapshot.knowledge_cards]);
 
-  const value = useMemo<LocalDataContextValue>(() => ({ ...snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createDiagram, exportDiagram, importDiagram, importMapSpec, updateDiagram, createNode, updateNode, updateNodes, deleteNode, restoreTrashItem, permanentlyDeleteTrashItem, emptyTrash, updateSettings, createKnowledgeCard, updateKnowledgeCard, exportBackup: () => createBackup(snapshot), parseBackup, importBackup: async (backup, mode) => { await importBackup(backup, mode); await refresh(); }, clearAll: async () => { await clearLocalDatabase(); await refresh(); } }), [snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createDiagram, exportDiagram, importDiagram, importMapSpec, updateDiagram, createNode, updateNode, updateNodes, deleteNode, restoreTrashItem, permanentlyDeleteTrashItem, emptyTrash, updateSettings, createKnowledgeCard, updateKnowledgeCard]);
+  const value = useMemo<LocalDataContextValue>(() => ({ ...snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createDiagram, deleteDiagram, exportDiagram, importDiagram, importMapSpec, updateDiagram, createNode, updateNode, updateNodes, deleteNode, restoreTrashItem, permanentlyDeleteTrashItem, emptyTrash, updateSettings, createKnowledgeCard, updateKnowledgeCard, exportBackup: () => createBackup(snapshot), parseBackup, importBackup: async (backup, mode) => { await importBackup(backup, mode); await refresh(); }, clearAll: async () => { await clearLocalDatabase(); await refresh(); } }), [snapshot, ready, error, refresh, createQuestion, updateQuestion, deleteQuestion, toggleFavorite, assignQuestions, recordReview, createSubject, updateSubject, deleteSubject, createDiagram, deleteDiagram, exportDiagram, importDiagram, importMapSpec, updateDiagram, createNode, updateNode, updateNodes, deleteNode, restoreTrashItem, permanentlyDeleteTrashItem, emptyTrash, updateSettings, createKnowledgeCard, updateKnowledgeCard]);
 
   return <LocalDataContext.Provider value={value}>{children}</LocalDataContext.Provider>;
 }

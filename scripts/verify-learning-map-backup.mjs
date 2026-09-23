@@ -37,7 +37,7 @@ assert(backup.data.nodes.every((item) => !item.knowledge_card_id || cardIds.has(
 assert(backup.data.knowledge_cards.every((item) => subjectIds.has(item.subject_id)), "知識卡含無效主題參照。");
 assert(backup.data.questions.every((item) => !item.subject_id || subjectIds.has(item.subject_id)), "錯題含無效主題參照。");
 assert(backup.data.reviews.every((item) => questionIds.has(item.question_id)), "複習紀錄含無效錯題參照。");
-assert(backup.data.trash.every((item) => ["subject", "node", "question"].includes(item.entity_type) && item.payload && typeof item.payload === "object"), "資源回收桶資料無效。");
+assert(backup.data.trash.every((item) => ["subject", "diagram", "node", "question"].includes(item.entity_type) && item.payload && typeof item.payload === "object"), "資源回收桶資料無效。");
 
 for (const diagram of backup.data.diagrams) {
   if (!diagram.map_content) continue;
