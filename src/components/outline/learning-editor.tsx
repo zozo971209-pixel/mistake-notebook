@@ -783,7 +783,7 @@ function LearningEditorBody({ initialAnnotations, placeholder, footer, editable,
     />, toolbarTarget)}
     {navigationTarget && editable && createPortal(<AnnotationPanel annotations={annotations} headings={headings} anchors={readingAnchors} activeAnchorKeys={activeReadingSelection.anchorKeys} activeViewportTop={activeAlignmentTop} onHeadingClick={(key) => { setActiveReadingSelection({ anchorKeys: [], markIds: [] }); setActiveAlignmentTop(null); editor.getElementByKey(key)?.scrollIntoView({ behavior: "smooth", block: "center" }); }} onAnnotationClick={activateAnnotationTarget} onDelete={deleteAnnotationTarget} embedded />, navigationTarget)}
     {selectionToolbar && editable && selectionTools.length > 0 && createPortal(<SelectionToolbar position={selectionToolbar} editor={editor} onAnnotate={beginAnnotation} onLink={beginLink} tools={selectionTools} />, document.body)}
-    <div className={cn("flex items-stretch", showReadingNavigation && "mx-auto max-w-[1180px] items-start gap-6 px-6 py-8")}>
+    <div className={cn("flex flex-col items-stretch lg:flex-row", showReadingNavigation && "mx-auto max-w-[1180px] items-start gap-6 px-6 py-8")}>
       <div className={cn("min-w-0 flex-1 p-3 sm:p-8", showReadingNavigation && "p-0 sm:p-0")}>
         <article ref={articleRef} className={cn("mx-auto min-h-[72vh] max-w-[800px] bg-white px-6 py-8 text-slate-900 sm:px-12 sm:py-12", editable && "shadow-[0_10px_35px_rgb(31_41_55_/_0.10)]")}>
           <div className="relative">
@@ -1488,7 +1488,7 @@ function SanitizedPastePlugin() {
 }
 
 function SelectionToolbar({ position, editor, onAnnotate, onLink, tools }: { position: { left: number; top: number }; editor: LexicalEditor; onAnnotate: () => void; onLink: () => void; tools: SelectionToolId[] }) {
-  return <div className="fixed z-40 flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-xl border bg-popover p-1 shadow-xl" style={position} role="toolbar" aria-label="選取文字工具">
+  return <div className="selection-floating-toolbar fixed z-40 hidden max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-xl border bg-popover p-1 shadow-xl md:flex" style={position} role="toolbar" aria-label="選取文字工具">
     {tools.includes("bold") && <ToolButton label="粗體" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold")}><Bold /></ToolButton>}
     {tools.includes("italic") && <ToolButton label="斜體" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "italic")}><Italic /></ToolButton>}
     {tools.includes("underline") && <ToolButton label="底線" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "underline")}><Underline /></ToolButton>}
@@ -1525,7 +1525,7 @@ function AnnotationPanel({ annotations, headings, anchors, activeAnchorKeys, act
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeAnchorKeys, activeViewportTop]);
-  return <aside className={cn(embedded ? "min-w-0" : "w-72 shrink-0 border-l bg-card p-4 max-lg:absolute max-lg:right-0 max-lg:z-10 max-lg:h-full max-lg:shadow-xl")}>
+  return <aside className={cn(embedded ? "min-w-0" : "order-first w-full shrink-0 border-b bg-card p-4 lg:order-none lg:w-72 lg:border-b-0 lg:border-l")}>
     <div className="mb-4"><h2 className="font-semibold">文件導覽</h2><p className="mt-1 text-xs text-muted-foreground">標題目錄與個人注釋。</p></div>
     {headings.length > 0 && <nav className="mb-5 space-y-1 border-b pb-4" aria-label="文件目錄">{headings.map((heading) => <button key={heading.key} type="button" className={cn("block w-full truncate rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent", heading.level === 3 && "pl-5 text-xs text-muted-foreground")} onClick={() => onHeadingClick(heading.key)}>{heading.text || "未命名標題"}</button>)}</nav>}
     <h3 className="mb-3 text-sm font-semibold">注釋位置（{rows.length}）</h3>

@@ -479,6 +479,12 @@
   font-weight: 600;
 }
 
+@media (pointer: coarse) {
+  .selection-floating-toolbar {
+    display: none;
+  }
+}
+
 @media (min-width: 768px) {
   html {
     scrollbar-width: none;

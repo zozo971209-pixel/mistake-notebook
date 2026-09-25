@@ -128,6 +128,35 @@ try {
     if (!await evaluate("document.querySelector('.learning-editor') !== null")) throw new Error("節點編輯器沒有載入");
   });
   pageMetrics["/node"] = await assertNoHorizontalOverflow("/node");
+  const annotationToggleClicked = await evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find((candidate) => /^\\d+$/.test(candidate.innerText.trim()) && candidate.querySelector('svg'));
+    button?.click();
+    return Boolean(button);
+  })()`);
+  if (!annotationToggleClicked) throw new Error("找不到文件導覽切換按鈕");
+  const mobileEditorLayout = await retry(async () => {
+    const value = await evaluate(`(() => {
+      const editor = document.querySelector('.learning-editor');
+      const article = editor?.closest('article');
+      const panel = [...document.querySelectorAll('aside')].find((element) => element.innerText.includes('文件導覽'));
+      const toRect = (element) => { const rect = element?.getBoundingClientRect(); return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width } : null; };
+      return { panel: toRect(panel), article: toRect(article), documentWidth: document.documentElement.scrollWidth };
+    })()`);
+    if (!value.panel || !value.article) throw new Error("文件導覽尚未顯示");
+    return value;
+  });
+  if (mobileEditorLayout.panel.left < -1 || mobileEditorLayout.panel.right > 391 || mobileEditorLayout.panel.bottom > mobileEditorLayout.article.top + 1) {
+    throw new Error(`手機文件導覽必須全寬排列在文件上方，不能覆蓋內文：${JSON.stringify(mobileEditorLayout)}`);
+  }
+  const mobileSelectionToolbarDisplay = await evaluate(`(() => {
+    const probe = document.createElement('div');
+    probe.className = 'selection-floating-toolbar fixed md:flex';
+    document.body.append(probe);
+    const display = getComputedStyle(probe).display;
+    probe.remove();
+    return display;
+  })()`);
+  if (mobileSelectionToolbarDisplay !== "none") throw new Error(`手機反白工具列仍會與系統選單重疊，目前 display=${mobileSelectionToolbarDisplay}`);
   const mapId = `mobile-map-${Date.now()}`;
   await evaluate(`new Promise((resolve, reject) => {
     const request = indexedDB.open("learning-map-local", 4);
@@ -175,7 +204,39 @@ try {
   if (!fullscreen.canvas || !fullscreen.panel || fullscreen.panel.top < fullscreen.canvas.bottom - 2 || fullscreen.panel.bottom > fullscreen.innerHeight + 2) throw new Error(`手機地圖上下配置異常：${JSON.stringify(fullscreen)}`);
   if (!fullscreen.toolbar || fullscreen.toolbar.right > fullscreen.innerWidth + 1) throw new Error(`手機工具列超出畫面：${JSON.stringify(fullscreen)}`);
 
-  console.log(JSON.stringify({ viewport: "390x844@2", pages: pageMetrics, embeddedTouchAction, fullscreen }, null, 2));
+  await command("Emulation.setTouchEmulationEnabled", { enabled: false });
+  await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false, screenWidth: 1440, screenHeight: 900 });
+  await command("Page.navigate", { url: `http://localhost:3000/node/?id=${encodeURIComponent(nodeId)}` });
+  await retry(async () => {
+    if (!await evaluate("document.querySelector('.learning-editor') !== null")) throw new Error("桌面節點編輯器沒有載入");
+  });
+  const desktopSelectionToolbarDisplay = await evaluate(`(() => {
+    const probe = document.createElement('div');
+    probe.className = 'selection-floating-toolbar fixed md:flex';
+    document.body.append(probe);
+    const display = getComputedStyle(probe).display;
+    probe.remove();
+    return display;
+  })()`);
+  if (desktopSelectionToolbarDisplay !== "flex") throw new Error(`桌面反白工具列不應被手機規則隱藏，目前 display=${desktopSelectionToolbarDisplay}`);
+  await evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find((candidate) => /^\\d+$/.test(candidate.innerText.trim()) && candidate.querySelector('svg'));
+    button?.click();
+    return Boolean(button);
+  })()`);
+  const desktopEditorLayout = await retry(async () => {
+    const value = await evaluate(`(() => {
+      const article = document.querySelector('.learning-editor')?.closest('article');
+      const panel = [...document.querySelectorAll('aside')].find((element) => element.innerText.includes('文件導覽'));
+      const toRect = (element) => { const rect = element?.getBoundingClientRect(); return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width } : null; };
+      return { panel: toRect(panel), article: toRect(article) };
+    })()`);
+    if (!value.panel || !value.article) throw new Error("桌面文件導覽尚未顯示");
+    return value;
+  });
+  if (desktopEditorLayout.panel.left < desktopEditorLayout.article.right - 1) throw new Error(`桌面文件導覽不應覆蓋內文：${JSON.stringify(desktopEditorLayout)}`);
+
+  console.log(JSON.stringify({ viewport: "390x844@2", pages: pageMetrics, mobileEditorLayout, mobileSelectionToolbarDisplay, embeddedTouchAction, fullscreen, desktopSelectionToolbarDisplay, desktopEditorLayout }, null, 2));
 } finally {
   socket?.close();
   chrome.kill();
