@@ -148,15 +148,22 @@ try {
   if (mobileEditorLayout.panel.left < -1 || mobileEditorLayout.panel.right > 391 || mobileEditorLayout.panel.bottom > mobileEditorLayout.article.top + 1) {
     throw new Error(`手機文件導覽必須全寬排列在文件上方，不能覆蓋內文：${JSON.stringify(mobileEditorLayout)}`);
   }
-  const mobileSelectionToolbarDisplay = await evaluate(`(() => {
+  const mobileSelectionToolbar = await evaluate(`(() => {
     const probe = document.createElement('div');
     probe.className = 'selection-floating-toolbar fixed md:flex';
+    probe.style.left = '120px';
+    probe.style.top = '160px';
+    probe.textContent = '文字工具';
     document.body.append(probe);
-    const display = getComputedStyle(probe).display;
+    const style = getComputedStyle(probe);
+    const rect = probe.getBoundingClientRect();
+    const value = { display: style.display, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight };
     probe.remove();
-    return display;
+    return value;
   })()`);
-  if (mobileSelectionToolbarDisplay !== "none") throw new Error(`手機反白工具列仍會與系統選單重疊，目前 display=${mobileSelectionToolbarDisplay}`);
+  if (mobileSelectionToolbar.display !== "flex" || mobileSelectionToolbar.left < 0 || mobileSelectionToolbar.right > 390 || mobileSelectionToolbar.bottom > mobileSelectionToolbar.viewportHeight - 80 || mobileSelectionToolbar.top < mobileSelectionToolbar.viewportHeight / 2) {
+    throw new Error(`手機 App 文字工具列必須停駐於下方、避開原生選取選單與底部導覽：${JSON.stringify(mobileSelectionToolbar)}`);
+  }
   const mapId = `mobile-map-${Date.now()}`;
   await evaluate(`new Promise((resolve, reject) => {
     const request = indexedDB.open("learning-map-local", 4);
@@ -236,7 +243,7 @@ try {
   });
   if (desktopEditorLayout.panel.left < desktopEditorLayout.article.right - 1) throw new Error(`桌面文件導覽不應覆蓋內文：${JSON.stringify(desktopEditorLayout)}`);
 
-  console.log(JSON.stringify({ viewport: "390x844@2", pages: pageMetrics, mobileEditorLayout, mobileSelectionToolbarDisplay, embeddedTouchAction, fullscreen, desktopSelectionToolbarDisplay, desktopEditorLayout }, null, 2));
+  console.log(JSON.stringify({ viewport: "390x844@2", pages: pageMetrics, mobileEditorLayout, mobileSelectionToolbar, embeddedTouchAction, fullscreen, desktopSelectionToolbarDisplay, desktopEditorLayout }, null, 2));
 } finally {
   socket?.close();
   chrome.kill();

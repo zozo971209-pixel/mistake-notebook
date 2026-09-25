@@ -481,7 +481,15 @@
 
 @media (pointer: coarse) {
   .selection-floating-toolbar {
-    display: none;
+    top: auto !important;
+    right: 0.75rem;
+    bottom: calc(env(safe-area-inset-bottom) + 6.75rem);
+    left: 0.75rem !important;
+    display: flex !important;
+    width: fit-content;
+    max-width: calc(100vw - 1.5rem);
+    margin-inline: auto;
+    transform: none;
   }
 }
 
