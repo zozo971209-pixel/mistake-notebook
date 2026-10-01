@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { InstallPromptCapture } from "@/components/settings/install-app-card";
 import { AppLogo } from "@/components/layout/app-logo";
 
 const SIDEBAR_STORAGE_KEY = "learning-map-windows-sidebar-collapsed";
@@ -74,7 +73,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return <div className="min-h-screen bg-background">
-    <InstallPromptCapture />
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-sidebar/95 p-5 shadow-[8px_0_30px_rgb(24_32_51_/_0.03)] backdrop-blur lg:flex lg:flex-col">
       <Link href="/dashboard" className="mb-6 flex items-center gap-3 px-2"><AppLogo size={40} /><strong>學習地圖</strong></Link>
       <Button asChild className="mb-5 w-full justify-start"><Link href="/questions/new"><Plus />新增錯題</Link></Button>
